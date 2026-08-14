@@ -1021,6 +1021,14 @@ function readCelebrationPreference() {
     return true;
   }
 }
+function readInlineHintPreference() {
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem("kitcode:inline-hints") !== "off";
+  } catch {
+    return true;
+  }
+}
 function readMascotPreference() {
   if (typeof window === "undefined") return true;
   try {
@@ -1122,6 +1130,10 @@ export default function Home() {
   const [aiStatus, setAiStatus] = useState<AiStatus>({});
   const [coachInput, setCoachInput] = useState("");
   const [editorHint, setEditorHint] = useState<EditorHint | null>(null);
+  const [inlineHintsEnabled, setInlineHintsEnabled] = useState(
+    readInlineHintPreference,
+  );
+  const [editorMountVersion, setEditorMountVersion] = useState(0);
   const [editorEdit, setEditorEdit] = useState<EditorEdit | null>(null);
   const [pendingEditorEdit, setPendingEditorEdit] = useState<EditorEdit | null>(
     null,
@@ -1152,6 +1164,10 @@ export default function Home() {
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
   const decorationRef = useRef<string[]>([]);
   const hintDecorationRef = useRef<string[]>([]);
+  const hintViewZoneRef = useRef<{
+    editor: Parameters<OnMount>[0];
+    id: string;
+  } | null>(null);
   const editDecorationRef = useRef<string[]>([]);
   const applyingEditorEditRef = useRef(false);
   const editSequenceRef = useRef(0);
@@ -1784,31 +1800,70 @@ export default function Home() {
   useEffect(() => {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
+    const removeHintViewZone = () => {
+      const existing = hintViewZoneRef.current;
+      if (!existing) return;
+      hintViewZoneRef.current = null;
+      const existingModel = existing.editor.getModel();
+      if (!existingModel || existingModel.isDisposed()) return;
+      existing.editor.changeViewZones((accessor) => {
+        accessor.removeZone(existing.id);
+      });
+    };
+
+    removeHintViewZone();
     if (!editor || !monaco) return;
     const model = editor.getModel();
     const line =
       editorHint && model
         ? Math.min(Math.max(1, editorHint.line), model.getLineCount())
         : 1;
-    const column = model ? model.getLineMaxColumn(line) : 1;
     hintDecorationRef.current = editor.deltaDecorations(
       hintDecorationRef.current,
-      editorHint
+      inlineHintsEnabled && editorHint && model
         ? [
             {
-              range: new monaco.Range(line, column, line, column),
+              range: new monaco.Range(line, 1, line, 1),
               options: {
-                after: {
-                  content: `  # Hint: ${editorHint.text}`,
-                  inlineClassName: "editor-hint-ghost",
-                  cursorStops: monaco.editor.InjectedTextCursorStops.None,
-                },
+                isWholeLine: true,
+                className: "editor-hint-line",
               },
             },
           ]
         : [],
     );
-  }, [editorHint]);
+
+    if (!inlineHintsEnabled || !editorHint || !model) {
+      editor.render(true);
+      return;
+    }
+
+    const hintNode = document.createElement("div");
+    hintNode.className = "editor-hint-inline";
+    hintNode.setAttribute("aria-hidden", "true");
+    const hintLabel = document.createElement("strong");
+    hintLabel.textContent = `Hint - Line ${line}:`;
+    const hintText = document.createElement("span");
+    hintText.textContent = editorHint.text;
+    hintNode.append(hintLabel, " ", hintText);
+
+    let zoneId = "";
+    editor.changeViewZones((accessor) => {
+      zoneId = accessor.addZone({
+        afterLineNumber: line,
+        heightInPx: 58,
+        domNode: hintNode,
+        suppressMouseDown: true,
+      });
+    });
+    if (zoneId) hintViewZoneRef.current = { editor, id: zoneId };
+    editor.revealLineInCenterIfOutsideViewport(line);
+    editor.layout();
+    editor.render(true);
+    return () => {
+      if (hintViewZoneRef.current?.editor === editor) removeHintViewZone();
+    };
+  }, [editorHint, editorMountVersion, inlineHintsEnabled]);
   useEffect(() => {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
@@ -1978,6 +2033,7 @@ export default function Home() {
   const onMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    hintDecorationRef.current = [];
     monaco.editor.defineTheme("kitcode-night", {
       base: "vs-dark",
       inherit: true,
@@ -1995,6 +2051,8 @@ export default function Home() {
       },
     });
     monaco.editor.setTheme("kitcode-night");
+    // Replay any hint that became ready while Monaco was still mounting.
+    setEditorMountVersion((version) => version + 1);
   };
   function scrollCoachToLatestIfNearBottom() {
     const panel = coachMessagesRef.current;
@@ -2355,6 +2413,17 @@ export default function Home() {
     try {
       window.localStorage.setItem(
         "kitcode:success-celebrations",
+        enabled ? "on" : "off",
+      );
+    } catch {
+      // The in-memory preference still works when browser storage is unavailable.
+    }
+  }
+  function setInlineHintPreference(enabled: boolean) {
+    setInlineHintsEnabled(enabled);
+    try {
+      window.localStorage.setItem(
+        "kitcode:inline-hints",
         enabled ? "on" : "off",
       );
     } catch {
@@ -4592,6 +4661,23 @@ export default function Home() {
             <details className="other-kitcode-options">
               <summary>Other KitCode options</summary>
               <div className="settings-disclosure-body">
+                <div className="celebration-setting">
+                  <input
+                    id="inline-hints"
+                    type="checkbox"
+                    checked={inlineHintsEnabled}
+                    onChange={(event) =>
+                      setInlineHintPreference(event.target.checked)
+                    }
+                  />
+                  <label htmlFor="inline-hints">
+                    <strong>Show hints in the editor</strong>
+                    <small>
+                      Turn this off to show AI hints only in the card below your
+                      code.
+                    </small>
+                  </label>
+                </div>
                 <div className="celebration-setting">
               <input
                 id="success-celebrations"

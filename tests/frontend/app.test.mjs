@@ -994,9 +994,14 @@ test("adaptive coach offers a non-mutating editor hint workflow", async () => {
   assert.match(page, /const coachReady = Boolean\(\s*aiStatus\.configured &&\s+draftReady/);
   assert.match(page, /setDraftReady\(false\);\s+draftExerciseRef\.current = ""/);
   assert.match(page, /hintDecorationRef/);
-  assert.match(page, /editor-hint-ghost/);
-  assert.match(page, /model\.getLineMaxColumn\(line\)/);
-  assert.match(page, /InjectedTextCursorStops\.None/);
+  assert.match(page, /editor-hint-inline/);
+  assert.match(page, /hintViewZoneRef/);
+  assert.match(page, /accessor\.addZone\(\{/);
+  assert.match(page, /function readInlineHintPreference\(\)[\s\S]*?localStorage\.getItem\("kitcode:inline-hints"\) !== "off"/);
+  assert.match(page, /const \[inlineHintsEnabled, setInlineHintsEnabled\] = useState\(\s*readInlineHintPreference/);
+  assert.match(page, /localStorage\.setItem\(\s*"kitcode:inline-hints",\s*enabled \? "on" : "off"/);
+  assert.match(page, /id="inline-hints"\s+type="checkbox"\s+checked=\{inlineHintsEnabled\}/);
+  assert.match(page, /<label htmlFor="inline-hints">[\s\S]*?Show hints in the editor[\s\S]*?only in the card below your\s+code/);
   assert.match(page, /result\.structured !== true/);
   assert.match(page, /safeInlineHint\(result\.text \?\? result\.hint\)/);
   assert.match(page, /setEditorHint\(\{ id: \+\+hintSequenceRef\.current, line, text: hint \}\)/);
@@ -1010,6 +1015,7 @@ test("adaptive coach offers a non-mutating editor hint workflow", async () => {
   assert.doesNotMatch(resetBody, /setEditorHint\(null\)/);
   assert.match(page, /function selectExercise\(exerciseId: string\)[\s\S]*?cancelCoachWork\(true, true\)/);
   assert.doesNotMatch(page, /function requestHint\(\).*clearEditorHint\(\)/);
+  assert.match(page, /\{editorHint && \(\s*<div[\s\S]*?className="editor-hint-card"/);
   assert.match(page, /className="editor-hint-card"\s+role="status"/);
   assert.match(page, /clearEditorHint\(\);\s+editorRef\.current\?\.focus\(\)/);
   assert.match(page, />\s*Dismiss\s*<\/button>/);
@@ -1017,9 +1023,35 @@ test("adaptive coach offers a non-mutating editor hint workflow", async () => {
   assert.match(page, /recent\s+current-drill conversation messages/);
   assert.doesNotMatch(page, /setEditorHint\(String\(result\.text/);
   assert.match(styles, /\.coach-quick-actions/);
-  assert.match(styles, /\.editor-hint-ghost/);
+  assert.match(styles, /\.editor-hint-inline/);
   assert.match(styles, /\.editor-hint-card/);
   assert.match(styles, /forced-colors:active/);
+});
+
+test("a ready hint mounts a Monaco view zone only when inline hints are enabled", async () => {
+  const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
+  const hintAnchor = page.indexOf("const line =\n      editorHint");
+  assert.ok(hintAnchor >= 0, "the hint-decoration effect is present");
+  const effectStart = page.lastIndexOf("useEffect(() => {", hintAnchor);
+  const effectEnd = page.indexOf("  useEffect(() => {", hintAnchor);
+  const hintEffect = page.slice(effectStart, effectEnd);
+
+  assert.match(hintEffect, /removeHintViewZone\(\)/);
+  assert.match(hintEffect, /inlineHintsEnabled && editorHint && model/);
+  assert.match(hintEffect, /if \(!inlineHintsEnabled \|\| !editorHint \|\| !model\)/);
+  assert.match(hintEffect, /hintNode\.className = "editor-hint-inline"/);
+  assert.match(hintEffect, /hintText\.textContent = editorHint\.text/);
+  assert.match(hintEffect, /hintNode\.append\(hintLabel, " ", hintText\)/);
+  assert.match(hintEffect, /editor\.changeViewZones\(\(accessor\) => \{/);
+  assert.match(hintEffect, /afterLineNumber: line/);
+  assert.match(hintEffect, /zoneId = accessor\.addZone\(/);
+  assert.match(hintEffect, /hintViewZoneRef\.current = \{ editor, id: zoneId \}/);
+  assert.match(hintEffect, /editor\.layout\(\)/);
+  assert.match(hintEffect, /editor\.render\(true\)/);
+  assert.match(hintEffect, /\}, \[editorHint, editorMountVersion, inlineHintsEnabled\]\);/);
+  assert.doesNotMatch(hintEffect, /onDidChangeModelContent|model\.getVersionId\(\)/);
+  assert.match(page, /const \[editorMountVersion, setEditorMountVersion\] = useState\(0\)/);
+  assert.match(page, /const onMount: OnMount = \(editor, monaco\) => \{[\s\S]*?hintDecorationRef\.current = \[\][\s\S]*?setEditorMountVersion\(\(version\) => version \+ 1\)/);
 });
 
 test("explicit editor-write requests are isolated, undoable, and visibly marked", async () => {
