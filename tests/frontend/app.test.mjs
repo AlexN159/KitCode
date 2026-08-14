@@ -159,7 +159,7 @@ test("responsive drawers and AI data consent stay wired", async () => {
   ]);
   assert.match(page, /kitcode:coach-data-consent-provider/);
   assert.match(page, /title,\s+description, topics, examples, constraints, complexity and\s+hints/);
-  assert.match(page, /Hidden tests and\s+reference solutions are never sent/);
+  assert.match(page, /Hidden tests and\s+reference solutions are not included/);
   assert.match(page, /Open practice problems/);
   assert.match(page, /Open AI coach/);
   assert.match(styles, /\.problem-bank\.drawer-open/);
@@ -182,10 +182,7 @@ test("workflow results are scoped to the active drill and dialogs keep keyboard 
 });
 
 test("plain F5 runs the script instead of refreshing, Spyder-style", async () => {
-  const [page, readme] = await Promise.all([
-    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
-    readFile(new URL("README.md", projectRoot), "utf8"),
-  ]);
+  const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
   assert.match(page, /const plainF5 =\s+event\.key === "F5" &&\s+!event\.ctrlKey &&\s+!event\.metaKey &&\s+!event\.altKey &&\s+!event\.shiftKey/);
   assert.match(page, /if \(plainF5\) \{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);/);
   assert.match(page, /workflowBusyRef\.current/);
@@ -194,14 +191,10 @@ test("plain F5 runs the script instead of refreshing, Spyder-style", async () =>
   assert.match(page, /settingsOpen\s+\|\|\s+coachConsentOpen\s+\|\|\s+codexInstallConfirmOpen\s+\|\|\s+event\.repeat\s+\|\|\s+event\.isComposing/);
   assert.match(page, /aria-keyshortcuts="F5 Control\+Enter"/);
   assert.match(page, /Run script \(F5 or Ctrl\+Enter\)/);
-  assert.match(readme, /Run the current script \(Spyder-style\).*`F5` or `Ctrl\+Enter`/);
 });
 
 test("plain F6 submits the current solution outside dialogs", async () => {
-  const [page, readme] = await Promise.all([
-    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
-    readFile(new URL("README.md", projectRoot), "utf8"),
-  ]);
+  const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
   assert.match(
     page,
     /const plainF6 =\s+event\.key === "F6" &&\s+!event\.ctrlKey &&\s+!event\.metaKey &&\s+!event\.altKey &&\s+!event\.shiftKey/,
@@ -213,10 +206,17 @@ test("plain F6 submits the current solution outside dialogs", async () => {
   assert.match(page, /aria-keyshortcuts="F6 Control\+Shift\+S"/);
   assert.match(page, /Submit solution \(F6 or Ctrl\+Shift\+S\)/);
   assert.match(page, /Submit <kbd>F6<\/kbd>/);
-  assert.match(
-    readme,
-    /Submit the current solution.*`F6` or `Ctrl\+Shift\+S`/,
-  );
+});
+
+test("README gives learners a direct Windows download and short startup path", async () => {
+  const readme = await readFile(new URL("README.md", projectRoot), "utf8");
+  assert.match(readme, /releases\/latest\/download\/KitCode-Windows\.zip/);
+  assert.match(readme, /!\[KitCode workspace preview\]\(\.github\/kitcode-workspace\.png\)/);
+  await access(new URL(".github/kitcode-workspace.png", projectRoot));
+  assert.match(readme, /Extract All/);
+  assert.match(readme, /double-click \*\*`launch\.bat`\*\*/i);
+  assert.doesNotMatch(readme, /## AI coach setup/);
+  assert.doesNotMatch(readme, /## Development/);
 });
 
 test("AI setup keeps provider choices, privacy terms, and current-model guidance local", async () => {
@@ -225,13 +225,12 @@ test("AI setup keeps provider choices, privacy terms, and current-model guidance
     assert.match(page, new RegExp(model.replaceAll(".", "\\.")));
   }
   assert.match(page, /Set up AI/);
-  assert.match(page, /eligible\s+organizations/);
-  assert.match(page, /Add a positive balance or budget/);
-  assert.match(page, /models, limits, and eligibility\s+can change/);
-  assert.match(page, /platform\.openai\.com\/settings\/organization\/data-controls/);
-  assert.match(page, /console\.anthropic\.com\/settings\/keys/);
+  assert.match(page, /I am an advanced user with custom LLM instructions/);
+  assert.match(page, /Choose a custom provider/);
+  assert.match(page, /API providers may charge/);
+  assert.match(page, /non-loopback model URLs can send\s+coaching data off this PC/);
   assert.match(page, /rel="noopener noreferrer"/);
-  assert.match(page, /stored in this app’s ignored/);
+  assert.doesNotMatch(page, /Codex quick start/);
 });
 
 test("AI switching keeps saved keys private and re-prompts consent per provider", async () => {
@@ -243,33 +242,32 @@ test("AI switching keeps saved keys private and re-prompts consent per provider"
   assert.match(page, /kitcode:coach-data-consent-provider/);
   assert.match(page, /function hasCoachConsent/);
   assert.match(page, /function rememberCoachConsent/);
-  assert.match(page, /developers\.openai\.com\/api\/docs\/models/);
-  assert.match(page, /platform\.claude\.com\/docs\/en\/about-claude\/models\/overview/);
   assert.match(page, /learn\.chatgpt\.com\/docs\/codex\/cli/);
-  assert.match(page, /deposit alone never guarantees\s+complimentary tokens/);
+  assert.match(page, /Your first request asks for consent/);
   assert.match(page, /coachBusy/);
 });
 
-test("Codex detection is explicit about its limits and reports actionable local readiness", async () => {
+test("AI setup starts with one Codex-first path and keeps custom LLM setup collapsed", async () => {
   const [page, styles] = await Promise.all([
     readFile(new URL("app/page.tsx", projectRoot), "utf8"),
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
   ]);
-  assert.match(page, /Detect & use Codex/);
-  assert.match(page, /Codex quick start/);
-  assert.match(page, /Windows app/);
-  assert.match(page, /Easiest\s*[··]\s*no API key/);
+  assert.match(page, /<details\s+className="advanced-llm-options"[\s\S]{0,300}<summary>I am an advanced user with custom LLM instructions<\/summary>/);
+  assert.equal((page.match(/Connect Codex/g) ?? []).length, 1);
+  assert.match(page, /Download Codex CLI/);
+  assert.match(page, /https:\/\/learn\.chatgpt\.com\/docs\/codex\/cli/);
+  assert.match(page, /No API key is\s+needed/);
+  assert.match(page, /cannot read your open chats/);
   assert.match(page, /\/api\/ai\/detect-codex/);
   assert.match(page, /setSetupProvider\("codex"\);\s+setCodexDetecting/);
   assert.match(page, /app_open\?: boolean/);
   assert.match(page, /cli_detected\?: boolean/);
   assert.match(page, /authenticated\?: boolean/);
-  assert.match(page, /cannot attach to, read, or\s+continue the\s+conversation visible in an open Codex desktop\s+window/);
-  assert.match(page, /separate private coaching (?:runs|requests)/);
-  assert.match(page, /Official Codex CLI guide/);
+  assert.match(page, /\[\s*"openai",\s*"anthropic",\s*"local_llm",\s*\]\s+as SetupProvider\[\]/);
   assert.match(page, /await refreshAiStatus\(\)/);
   assert.match(styles, /\.detect-codex-card/);
   assert.match(styles, /\.codex-detection\.ready/);
+  assert.match(styles, /\.advanced-llm-options/);
 });
 
 test("Codex guided setup confirms installation and monitors external sign-in", async () => {
@@ -289,14 +287,15 @@ test("Codex guided setup confirms installation and monitors external sign-in", a
   assert.match(styles, /\.install-confirm-backdrop/);
 });
 
-test("Local LLM setup detects any reachable endpoint and re-prompts consent by URL", async () => {
+test("advanced custom-model setup detects any reachable endpoint and re-prompts consent by URL", async () => {
   const [page, styles] = await Promise.all([
     readFile(new URL("app/page.tsx", projectRoot), "utf8"),
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
   ]);
   assert.match(page, /local_llm/);
   assert.match(page, /http:\/\/127\.0\.0\.1:5000\//);
-  assert.match(page, /Detect & use local LLM/);
+  assert.match(page, /Enter your server's model ID/);
+  assert.match(page, /Connect local LLM/);
   assert.match(page, /Probe only:/);
   assert.match(page, /never downloads, installs,\s+starts, supervises, or keeps a local model server running/);
   assert.match(page, /only when you\s+click the button/);
@@ -973,7 +972,7 @@ test("Kit wakes through a short registered sequence only after an actual waking 
 });
 
 test("adaptive coach offers a non-mutating editor hint workflow", async () => {
-  const [page, styles, readme] = await Promise.all([readFile(new URL("app/page.tsx", projectRoot), "utf8"), readFile(new URL("app/globals.css", projectRoot), "utf8"), readFile(new URL("README.md", projectRoot), "utf8")]);
+  const [page, styles] = await Promise.all([readFile(new URL("app/page.tsx", projectRoot), "utf8"), readFile(new URL("app/globals.css", projectRoot), "utf8")]);
   assert.match(page, /\/api\/ai\/editor-hint/);
   assert.match(page, /Give me a hint/);
   assert.doesNotMatch(page, /coachMode/);
@@ -1015,13 +1014,12 @@ test("adaptive coach offers a non-mutating editor hint workflow", async () => {
   assert.match(page, /clearEditorHint\(\);\s+editorRef\.current\?\.focus\(\)/);
   assert.match(page, />\s*Dismiss\s*<\/button>/);
   assert.match(page, /consentFocusTargetRef/);
-  assert.match(page, /recent current-drill conversation messages/);
+  assert.match(page, /recent\s+current-drill conversation messages/);
   assert.doesNotMatch(page, /setEditorHint\(String\(result\.text/);
   assert.match(styles, /\.coach-quick-actions/);
   assert.match(styles, /\.editor-hint-ghost/);
   assert.match(styles, /\.editor-hint-card/);
   assert.match(styles, /forced-colors:active/);
-  assert.match(readme, /hint stays visible while you type, reset, run, trace, or submit/);
 });
 
 test("explicit editor-write requests are isolated, undoable, and visibly marked", async () => {

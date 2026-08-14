@@ -440,19 +440,6 @@ function readLevelPreference(language: PracticeLanguage): PracticeLevel {
     return "Easy";
   }
 }
-function codexActionText(action?: string) {
-  if (action === "connected")
-    return "Connected automatically. Codex is now the selected coach.";
-  if (action === "install_codex_cli")
-    return "Install the standalone Codex CLI, sign in, then run detection again.";
-  if (action === "repair_codex_cli")
-    return "Windows found Codex but could not launch its CLI. Install or repair the standalone CLI, then try again.";
-  if (action === "run_codex_login")
-    return "Open PowerShell, run codex login, finish the ChatGPT sign-in, then try again.";
-  return (
-    action || "Follow the Codex CLI setup guide, then try detection again."
-  );
-}
 function localLlmActionText(action?: string) {
   if (action === "connected")
     return "Connected automatically. This endpoint is now the selected coach.";
@@ -3426,7 +3413,8 @@ export default function Home() {
         role="region"
         aria-label="Codex CLI setup actions"
       >
-        {!codexDetection.cli_detected || !codexDetection.cli_usable ? (
+        {codexDetection.cli_detected === false ||
+        codexDetection.cli_usable === false ? (
           <>
             <strong>
               {codexDetection.cli_detected
@@ -3434,9 +3422,10 @@ export default function Home() {
                 : "Install the Codex CLI"}
             </strong>
             <p>
-              {codexDetection.cli_detected
-                ? "Windows found a desktop-bundled or broken CLI that KitCode cannot launch. The standalone user installation resolves this."
-                : "The desktop app does not share a coaching session. The CLI creates separate private coaching requests."}
+              {codexDetection.detail ??
+                (codexDetection.cli_detected
+                  ? "Install the standalone CLI to repair this connection."
+                  : "Install the Codex CLI, then sign in with ChatGPT.")}
             </p>
             <button
               type="button"
@@ -3456,12 +3445,13 @@ export default function Home() {
                   : "Install Codex CLI"}
             </button>
           </>
-        ) : !codexDetection.authenticated ? (
+        ) : codexDetection.cli_usable === true &&
+          codexDetection.authenticated === false ? (
           <>
             <strong>Sign in to Codex CLI</strong>
             <p>
-              This opens official ChatGPT sign-in outside KitCode. KitCode never
-              sees your password or tokens.
+              {codexDetection.detail ??
+                "This opens official ChatGPT sign-in outside KitCode. KitCode never sees your password or tokens."}
             </p>
             <button
               type="button"
@@ -3481,20 +3471,25 @@ export default function Home() {
         ) : (
           <>
             <strong>Recheck Codex</strong>
-            <p>Finish the indicated CLI step, then recheck readiness.</p>
+            <p>
+              {codexDetection.detail ??
+                "Finish the indicated CLI step, then recheck readiness."}
+            </p>
+            <button
+              type="button"
+              className="text-button codex-recheck"
+              onClick={() => {
+                setCodexLoginPolling(false);
+                void detectCodex(true);
+              }}
+              disabled={
+                codexDetecting || codexInstalling || codexLoginStarting
+              }
+            >
+              {codexDetecting ? "Rechecking…" : "Recheck Codex"}
+            </button>
           </>
         )}
-        <button
-          type="button"
-          className="text-button codex-recheck"
-          onClick={() => {
-            setCodexLoginPolling(false);
-            void detectCodex(true);
-          }}
-          disabled={codexDetecting || codexInstalling || codexLoginStarting}
-        >
-          {codexDetecting ? "Rechecking…" : "Recheck Codex"}
-        </button>
         {codexActionResult && (
           <p className="codex-action-result" role="status">
             {codexActionResult.detail ??
@@ -4536,42 +4531,35 @@ export default function Home() {
               ×
             </button>
             <p className="eyebrow">KITCODE</p>
-            <h2 id="settings-title">AI Coach settings</h2>
+            <h2 id="settings-title">AI Coach (optional)</h2>
             <p className="modal-copy">
-              Connect KitCode to ChatGPT/Codex, or choose another AI provider
-              for coaching and in-editor help.
+              Get explanations and hints while you practise.
             </p>
-            <p className="modal-copy">
-              A pasted key is sent once from this local page to KitCode&apos;s
-              loopback backend and stored in this app’s ignored{" "}
-              <code>.env</code> file. It is never returned to or displayed by
-              the browser after saving. Local-LLM detection is performed by that
-              backend, never by a browser request to your model server.
-            </p>
-            <div className="connection-status">
-              <span className={aiStatus.configured ? "good" : "neutral"}>
-                ●
-              </span>
-              <div>
-                <strong>
-                  {aiStatus.configured
-                    ? `Selected provider: ${selectedProvider}${aiStatus.model ? ` · ${aiStatus.model}` : ""}`
-                    : "No selected provider"}
-                </strong>
-                <p>
-                  {aiStatus.configured
-                    ? `${aiStatus.provider === "local_llm" && (aiStatus.local_llm_url ?? aiStatus.base_url) ? `Endpoint: ${aiStatus.local_llm_url ?? aiStatus.base_url}. ` : ""}Available: ${availableProviders}. Coach prompts and editor code are sent only when you ask for help.`
-                    : "Connect ChatGPT/Codex, or choose another AI provider below."}
-                </p>
+            {aiStatus.configured && (
+              <div className="connection-status">
+                <span className="good">●</span>
+                <div>
+                  <strong>
+                    {selectedProvider} is connected
+                    {aiStatus.model ? ` · ${aiStatus.model}` : ""}
+                  </strong>
+                  <p>Ready for coaching.</p>
+                </div>
               </div>
-            </div>
+            )}
             <div className="detect-codex-card">
               <div>
-                <strong>Connect KitCode to ChatGPT/Codex</strong>
+                <strong>Start with Codex</strong>
                 <p>
-                  We can check for the desktop app and a separate local Codex
-                  CLI, then use Codex as your coach. This never reads or reuses an open
-                  desktop chat.
+                  <a
+                    href="https://learn.chatgpt.com/docs/codex/cli"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Download Codex CLI
+                  </a>
+                  , sign in with ChatGPT, then connect it here. No API key is
+                  needed, and KitCode cannot read your open chats.
                 </p>
               </div>
               <button
@@ -4580,10 +4568,31 @@ export default function Home() {
                 onClick={() => void detectCodex()}
                 disabled={codexDetecting}
               >
-                {codexDetecting ? "Scanning…" : "Detect & use Codex"}
+                {codexDetecting ? "Checking…" : "Connect Codex"}
               </button>
             </div>
-            <div className="celebration-setting">
+            {codexDetection?.ready && (
+              <div
+                className="codex-detection ready"
+                role="status"
+              >
+                <strong>Codex is ready for coaching</strong>
+                <p>
+                  {codexDetection.detail ??
+                    codexDetection.status ??
+                    "Connected with your ChatGPT sign-in."}
+                </p>
+              </div>
+            )}
+            {codexGuidedActions}
+            <p className="setup-privacy">
+              Your first AI request asks for permission before KitCode sends
+              your exercise text or code.
+            </p>
+            <details className="other-kitcode-options">
+              <summary>Other KitCode options</summary>
+              <div className="settings-disclosure-body">
+                <div className="celebration-setting">
               <input
                 id="success-celebrations"
                 type="checkbox"
@@ -4607,8 +4616,8 @@ export default function Home() {
               >
                 Preview
               </button>
-            </div>
-            <fieldset className="mascot-settings">
+                </div>
+                <fieldset className="mascot-settings">
               <legend>Kit the fox</legend>
               <div className="mascot-setting-head">
                 <label
@@ -4637,20 +4646,27 @@ export default function Home() {
                   <KitMascot size="settings" />
                 )}
               </div>
-            </fieldset>
-            {generatedDrillSettings}
-            <form className="ai-setup-form" onSubmit={saveAiSetup}>
-              <div className="power-kit-quickstart">
-                <strong>Codex quick start</strong>
-                <ol>
-                  <li><a href="https://learn.chatgpt.com/docs/windows/windows-app" target="_blank" rel="noopener noreferrer">Download or open the official ChatGPT Windows app</a>.</li>
-                  <li>Sign in to ChatGPT.</li>
-                  <li>Come back here and click <strong>Detect &amp; use Codex</strong>.</li>
-                </ol>
-                <small>If the separate local Codex CLI is missing, the guided installer below can set it up after you approve it.</small>
+                </fieldset>
+                {generatedDrillSettings}
               </div>
+            </details>
+            <details
+              className="advanced-llm-options"
+              onToggle={(event) => {
+                if (event.currentTarget.open && setupProvider === "codex") {
+                  chooseSetupProvider("openai");
+                }
+              }}
+            >
+              <summary>I am an advanced user with custom LLM instructions</summary>
+              <form className="ai-setup-form" onSubmit={saveAiSetup}>
+              <p className="advanced-llm-intro">
+                Use this only if you already have an API key or model server.
+                API providers may charge, and non-loopback model URLs can send
+                coaching data off this PC.
+              </p>
               <fieldset>
-                <legend>Choose an AI provider</legend>
+                <legend>Choose a custom provider</legend>
                 <div
                   className="provider-choices"
                   role="radiogroup"
@@ -4661,7 +4677,6 @@ export default function Home() {
                       "openai",
                       "anthropic",
                       "local_llm",
-                      "codex",
                     ] as SetupProvider[]
                   ).map((provider) => (
                     <button
@@ -4678,11 +4693,11 @@ export default function Home() {
                     >
                       <strong>
                         {provider === "openai"
-                          ? "Advanced · OpenAI API"
+                          ? "OpenAI API"
                           : provider === "anthropic"
-                            ? "Advanced · Anthropic / Claude"
+                            ? "Anthropic / Claude"
                             : provider === "local_llm"
-                              ? "Advanced · Local LLM"
+                              ? "Local LLM"
                               : "ChatGPT / Codex"}
                       </strong>
                       <small>
@@ -4768,7 +4783,7 @@ export default function Home() {
                     />
                   </label>
                   <label>
-                    Model (optional)
+                    Model ID
                     <input
                       value={setupCustomModel || setupModel}
                       onChange={(event) => {
@@ -4776,8 +4791,9 @@ export default function Home() {
                         setSetupModel("");
                       }}
                       maxLength={160}
-                      placeholder="Detect automatically when blank"
+                      placeholder="Enter your server's model ID"
                       autoComplete="off"
+                      required
                     />
                   </label>
                   <button
@@ -4788,7 +4804,7 @@ export default function Home() {
                   >
                     {localLlmDetecting
                       ? "Detecting…"
-                      : "⌕ Detect & use local LLM"}
+                      : "Connect local LLM"}
                   </button>
                   <p className="detect-codex-explainer">
                     Loopback URLs such as <code>127.0.0.1</code> keep prompts on
@@ -4832,206 +4848,7 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-              ) : (
-                <div className="codex-setup">
-                  <strong>Use your ChatGPT/Codex sign-in</strong>
-                  <p>
-                    KitCode uses a separately authenticated local Codex CLI
-                    for private coaching runs. It cannot attach to, read, or
-                    continue the conversation visible in an open Codex desktop
-                    window.
-                  </p>
-                  <button
-                    className="detect-codex-button"
-                    type="button"
-                    onClick={() => void detectCodex()}
-                    disabled={codexDetecting || codexLoginPolling}
-                  >
-                    {codexDetecting
-                      ? "Scanning for Codex…"
-                      : codexLoginPolling
-                        ? "Waiting for ChatGPT sign-in…"
-                        : "⌕ Detect & use Codex"}
-                  </button>
-                  <p className="detect-codex-explainer">
-                    Detection checks whether the desktop app appears open, then
-                    whether a separate local Codex CLI is installed, usable,
-                    and signed in. When ready, it powers Kit with Codex. It never reads
-                    window text, chat history, or session credentials. If the
-                    CLI is missing, the approved guided installer can set it up.
-                  </p>
-                  {codexDetection && (
-                    <div
-                      className={`codex-detection ${codexDetection.ready ? "ready" : ""}`}
-                      role="status"
-                    >
-                      <strong>
-                        {codexDetection.ready
-                          ? "Codex is ready for private coaching"
-                          : "Codex needs one more step"}
-                      </strong>
-                      <ul>
-                        <li>
-                          Desktop app:{" "}
-                          {codexDetection.app_open
-                            ? "appears open"
-                            : "not detected (optional)"}
-                        </li>
-                        <li>
-                          Codex CLI:{" "}
-                          {codexDetection.cli_detected
-                            ? codexDetection.cli_usable
-                              ? "found and usable"
-                              : "found, but needs attention"
-                            : "not found"}
-                        </li>
-                        <li>
-                          Sign-in:{" "}
-                          {codexDetection.authenticated
-                            ? "authenticated"
-                            : "not confirmed"}
-                        </li>
-                      </ul>
-                      <p>
-                        {codexDetection.detail ??
-                          codexDetection.status ??
-                          "No additional detail was returned."}
-                      </p>
-                      {codexDetection.action && (
-                        <p>
-                          <strong>Next:</strong>{" "}
-                          {codexActionText(codexDetection.action)}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <p>
-                    KitCode checks the local CLI and sends coaching only
-                    through
-                    a read-only, temporary workspace. No Codex session
-                    credential is copied into KitCode.
-                  </p>
-                  <p>
-                    After you approve it, KitCode can run OpenAI&apos;s official
-                    user-level Windows installer. Account authorization still
-                    happens in the separate Codex/ChatGPT sign-in window.
-                  </p>
-                  <p>
-                    {aiStatus.codex_usable
-                      ? "Codex CLI is ready on this computer."
-                      : (aiStatus.codex_detail ??
-                        "Install and authenticate Codex, then try Detect Codex again.")}{" "}
-                    <a
-                      href="https://learn.chatgpt.com/docs/codex/cli"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Official Codex CLI guide
-                    </a>
-                  </p>
-                </div>
-              )}
-              {setupProvider === "openai" ? (
-                <div className="setup-guidance">
-                  <strong>OpenAI usage and data controls</strong>
-                  <ol>
-                    <li>Create an API key.</li>
-                    <li>Add a positive balance or budget.</li>
-                    <li>Check Data Controls for current eligibility text.</li>
-                    <li>Optionally opt into shared eligible traffic.</li>
-                    <li>Select an eligible model and monitor usage/cost.</li>
-                  </ol>
-                  <p>
-                    Daily complimentary tokens are only for eligible
-                    organizations and traffic. A deposit alone never guarantees
-                    complimentary tokens; the offer may cover normal practice
-                    for eligible accounts, but models, limits, and eligibility
-                    can change.
-                  </p>
-                  <p>
-                    <a
-                      href="https://platform.openai.com/api-keys"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Create an OpenAI API key
-                    </a>{" "}
-                    ·{" "}
-                    <a
-                      href="https://platform.openai.com/settings/organization/billing/overview"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Billing
-                    </a>{" "}
-                    ·{" "}
-                    <a
-                      href="https://developers.openai.com/api/docs/models"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Current model list
-                    </a>{" "}
-                    ·{" "}
-                    <a
-                      href="https://platform.openai.com/settings/organization/data-controls"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Data Controls
-                    </a>
-                  </p>
-                </div>
-              ) : setupProvider === "anthropic" ? (
-                <div className="setup-guidance">
-                  <strong>Anthropic / Claude</strong>
-                  <p>
-                    Your key and the coach request are sent to Anthropic only
-                    when you ask for help. Review your organization’s billing,
-                    retention, and data settings before use.
-                  </p>
-                  <p>
-                    <a
-                      href="https://console.anthropic.com/settings/keys"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Anthropic Console keys
-                    </a>{" "}
-                    ·{" "}
-                    <a
-                      href="https://platform.claude.com/docs/en/about-claude/models/overview"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Claude model documentation
-                    </a>
-                  </p>
-                </div>
-              ) : setupProvider === "local_llm" ? (
-                <div className="setup-guidance">
-                  <strong>Local LLM privacy</strong>
-                  <p>
-                    For a loopback URL such as{" "}
-                    <code>http://127.0.0.1:5000/</code>, coaching stays on this
-                    machine. Any custom non-loopback URL can send the same
-                    coaching payload to another device or service; only use an
-                    endpoint you trust.
-                  </p>
-                </div>
-              ) : (
-                <div className="setup-guidance">
-                  <strong>Codex privacy</strong>
-                  <p>
-                    Coaching sends the learner-visible exercise title,
-                    description, topics, examples, constraints, complexity and
-                    hints, plus your question, cursor location, up to eight
-                    recent current-drill conversation messages, and complete
-                    editor contents to the authenticated Codex service when
-                    requested.
-                  </p>
-                </div>
-              )}
+              ) : null}
               {setupProvider === "local_llm" && (
                 <p className="setup-notice">
                   <strong>Probe only:</strong> KitCode never downloads, installs,
@@ -5041,13 +4858,8 @@ export default function Home() {
                 </p>
               )}
               <p className="setup-privacy">
-                By saving or using a provider, you acknowledge that prompts
-                include learner-visible exercise title, description, topics,
-                examples, constraints, complexity and hints, plus your question,
-                cursor location, up to eight recent current-drill conversation
-                messages, and complete editor contents. Hidden tests and
-                reference solutions are never sent. Do not include secrets,
-                personal data, employer code, or other sensitive material.
+                Your first request asks for consent. Never send secrets,
+                personal data, or proprietary code.
               </p>
               {setupNotice && (
                 <p className="setup-notice" role="status">
@@ -5063,22 +4875,22 @@ export default function Home() {
                 >
                   Remove all AI configuration
                 </button>
-                <button
-                  type="submit"
-                  className="submit-button"
-                  disabled={setupSaving}
-                >
-                  {setupSaving
-                    ? "Saving…"
-                    : setupProvider === "codex"
-                      ? "Use Codex"
+                {setupProvider !== "codex" && (
+                  <button
+                    type="submit"
+                    className="submit-button"
+                    disabled={setupSaving}
+                  >
+                    {setupSaving
+                      ? "Saving…"
                       : setupProvider === "local_llm"
                         ? "Use local LLM"
                         : "Save locally"}
-                </button>
+                  </button>
+                )}
               </div>
-              {setupProvider === "codex" && codexGuidedActions}
-            </form>
+              </form>
+            </details>
           </section>
         </div>
       )}

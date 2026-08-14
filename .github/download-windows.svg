@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="64" viewBox="0 0 360 64" role="img" aria-labelledby="title description">
+  <title id="title">Download KitCode for Windows</title>
+  <desc id="description">A blue download button</desc>
+  <rect width="360" height="64" rx="12" fill="#2563eb"/>
+  <path d="M37 16v21.5l-7.4-7.4-4.2 4.2L40 48.9l14.6-14.6-4.2-4.2-7.4 7.4V16h-6ZM24 51v5h32v-5H24Z" fill="#fff"/>
+  <text x="72" y="39" fill="#fff" font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">Download KitCode for Windows</text>
+</svg>
