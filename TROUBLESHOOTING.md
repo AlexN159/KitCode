@@ -25,7 +25,7 @@ The one-click launcher checks for `javac` and `java`, then uses `winget` to inst
 - If `winget` is unavailable, install a Java 17-or-newer JDK manually and set `JAVA_HOME` to its installation folder.
 - Corporate package policies can block `winget`; ask your administrator for an approved JDK in that case.
 
-SQL needs no separate database installation. Choose SQLite, PostgreSQL, MySQL, or Microsoft SQL Server from the editor toolbar. KitCode parses the selected writing dialect and translates compatible syntax into a fresh, isolated SQLite exercise dataset. The interface therefore says **Writing dialect: … · Judge: SQLite (built in)**. This is excellent for common interview-query syntax, but it is not a native PostgreSQL, MySQL, or SQL Server instance; highly vendor-specific functions or engine behaviours may be unsupported and return a controlled compatibility error.
+SQL needs no separate database installation. Choose SQLite, PostgreSQL, MySQL, or Microsoft SQL Server from the editor toolbar. KitCode parses the selected writing dialect and translates compatible syntax into a fresh, isolated SQLite exercise dataset. The interface therefore says **Writing dialect: … · Judge: SQLite (built in)**. This is excellent for common SQL-query syntax, but it is not a native PostgreSQL, MySQL, or SQL Server instance; highly vendor-specific functions or engine behaviours may be unsupported and return a controlled compatibility error.
 
 ## Port 8765 is already in use
 

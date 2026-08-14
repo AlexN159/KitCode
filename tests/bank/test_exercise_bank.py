@@ -1,4 +1,4 @@
-"""Regression checks for the local interview exercise catalogue."""
+"""Regression checks for the local practice exercise catalogue."""
 import os
 from pathlib import Path
 import tempfile

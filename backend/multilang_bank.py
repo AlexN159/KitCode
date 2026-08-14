@@ -1,4 +1,4 @@
-"""Curated Java and SQLite interview drills.
+"""Curated Java and SQLite practice drills.
 
 Each record uses the same public payload as the Python bank.  Java records are
 complete ``Main`` programs.  SQL records contain SQLite fixtures per test so a
@@ -34,7 +34,7 @@ def _record(*, key: str, title: str, language: str, difficulty: str, topics: lis
         visible_constraints.extend(f"Schema: {declaration.strip()}" for declaration in declarations)
     return {
         "id": key, "title": title, "language": language, "difficulty": difficulty,
-        "topics": topics, "interview_frequency": "Common", "description": description,
+        "topics": topics, "practice_frequency": "Common", "description": description,
         "constraints": visible_constraints, "examples": [{"input": cases[0].get("input", ""),
             "output": cases[0]["expected_output"]}], "starter_code": starter,
         "solution": solution, "hints": hints, "expected_complexity": complexity,
@@ -90,7 +90,7 @@ def _java_numeric() -> list[dict]:
             constraints=["0 <= n <= 200,000", "Values fit in signed 32-bit integers"], starter=JAVA_START,
             solution=_java_program("        "+body), cases=_number_cases(cases),
             hints=["Read the count before processing values.", "Track only the state the answer needs.", "Print one exact result with no labels."], complexity="O(n) time, O(1) extra space"))
-    # Repeat the ten skills with different interview framing and independently authored tests.
+    # Repeat the ten skills with different practice framing and independently authored tests.
     labels=[("temperature-total","Temperature Total"),("best-score","Best Exam Score"),("lowest-latency","Lowest Latency"),("weekend-count","Count Weekend Flags"),("odd-balance","Odd Balance"),("profitable-days","Profitable Days"),("spread","Price Spread"),("bookend-total","Bookend Total"),("reverse-log","Reverse Event Log"),("ordered-timestamps","Ordered Timestamps")]
     for offset,(slug,title) in enumerate(labels,11):
         base=defs[(offset-11)%10]
@@ -110,7 +110,7 @@ def _java_numeric() -> list[dict]:
 def _java_text() -> list[dict]:
     defs = [
         ("reverse-text","Reverse Text","Read one line and print it reversed.","String s=in.hasNextLine()?in.nextLine():\"\";System.out.println(new StringBuilder(s).reverse());",[("hello\n","olleh"),("a b\n","b a"),("\n",""),("racecar\n","racecar"),("123!\n","!321")]),
-        ("vowel-count","Count Vowels","Count a, e, i, o, u case-insensitively in one line.","String s=in.hasNextLine()?in.nextLine().toLowerCase():\"\";int c=0;for(char x:s.toCharArray())if(\"aeiou\".indexOf(x)>=0)c++;System.out.println(c);",[("Interview\n","4"),("rhythm\n","0"),("AEIOU\n","5"),("\n","0"),("a e i\n","3")]),
+        ("vowel-count","Count Vowels","Count a, e, i, o, u case-insensitively in one line.","String s=in.hasNextLine()?in.nextLine().toLowerCase():\"\";int c=0;for(char x:s.toCharArray())if(\"aeiou\".indexOf(x)>=0)c++;System.out.println(c);",[("Language\n","4"),("rhythm\n","0"),("AEIOU\n","5"),("\n","0"),("a e i\n","3")]),
         ("palindrome","Palindrome Ignoring Case","Print yes if a line reads identically backward ignoring case.","String s=in.hasNextLine()?in.nextLine().toLowerCase():\"\";System.out.println(s.equals(new StringBuilder(s).reverse().toString())?\"yes\":\"no\");",[("Level\n","yes"),("hello\n","no"),("\n","yes"),("A\n","yes"),("Java\n","no")]),
         ("word-count","Count Words","Count whitespace-separated words in one line.","String s=in.hasNextLine()?in.nextLine().trim():\"\";System.out.println(s.isEmpty()?0:s.split(\"\\\\s+\").length);",[("one two three\n","3"),("  spaced   out \n","2"),("\n","0"),("solo\n","1"),("a\tb\n","2")]),
         ("first-uppercase","First Uppercase Index","Print the zero-based index of the first uppercase letter, or -1.","String s=in.hasNextLine()?in.nextLine():\"\";int ans=-1;for(int i=0;i<s.length();i++)if(Character.isUpperCase(s.charAt(i))){ans=i;break;}System.out.println(ans);",[("abcDef\n","3"),("lower\n","-1"),("A\n","0"),("12Z\n","2"),("\n","-1")]),
@@ -132,7 +132,7 @@ def _java_text() -> list[dict]:
 
 
 def _java_patterns() -> list[dict]:
-    """Twenty small but useful map/set/number-formatting interview drills."""
+    """Twenty small but useful map/set/number-formatting practice drills."""
     defs = [
         ("unique-count", "Count Distinct Integers", "Print the number of distinct values among n integers.", "int n=in.nextInt();Set<Integer>s=new HashSet<>();for(int i=0;i<n;i++)s.add(in.nextInt());System.out.println(s.size());", [("5\n1 1 2 3 3\n","3"),("0\n","0"),("3\n-1 -1 -1\n","1"),("4\n4 3 2 1\n","4"),("2\n0 0\n","1")], "O(n) time, O(n) space"),
         ("first-repeat", "First Repeated Value", "Print the first value whose second occurrence is encountered, or -1.", "int n=in.nextInt();Set<Integer>s=new HashSet<>();int ans=-1;for(int i=0;i<n;i++){int x=in.nextInt();if(ans<0&&!s.add(x))ans=x;}System.out.println(ans);", [("5\n1 2 3 2 1\n","2"),("3\n1 2 3\n","-1"),("2\n7 7\n","7"),("0\n","-1"),("4\n-1 0 -1 0\n","-1")], "O(n) time, O(n) space"),
@@ -250,7 +250,7 @@ def _sql() -> list[dict]:
             num=(family_index-1)*10+variant
             # Difficulty reflects the SQL concept, not the position of its
             # source-table family. DISTINCT is a foundation; HAVING is an
-            # interview-level grouping skill. Truly advanced SQL lives in the
+            # advanced grouping skill. More complex SQL lives in the
             # separately reviewed recursive/window/relational-division bank.
             difficulty = (
                 "Easy"

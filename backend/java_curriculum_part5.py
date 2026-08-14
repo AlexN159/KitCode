@@ -21,7 +21,7 @@ def D(n: int, title: str, difficulty: str, topic: str, description: str,
       public: list[dict[str, str]], hidden: list[dict[str, str]]) -> dict:
     return {"id": f"java-curated-{n:03d}", "title": title, "language": "java",
             "difficulty": difficulty, "topics": [topic], "curriculum_family": topic,
-            "interview_frequency": "Common", "description": description,
+            "practice_frequency": "Common", "description": description,
             "constraints": constraints, "hints": hints, "expected_complexity": complexity,
             "starter_code": STARTER, "solution": solution, "public_tests": public,
             "hidden_tests": hidden,

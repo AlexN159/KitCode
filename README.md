@@ -1,4 +1,4 @@
-# KitCode Interview Studio
+# KitCode Practice Studio
 
 Practise Python, Java, and SQL on your Windows computer. No Git, terminal, or coding setup is needed.
 

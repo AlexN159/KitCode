@@ -10,7 +10,7 @@ import pytest
 from backend import main
 from backend.java_curriculum_part1 import JAVA_CURRICULUM_PART1
 from backend.java_curriculum_part2 import JAVA_CURRICULUM_PART2
-from backend.java_interview_bank import JAVA_INTERVIEW_EXERCISES
+from backend.java_practice_bank import JAVA_PRACTICE_EXERCISES
 from backend.multilang_bank import MULTILANG_EXERCISES
 
 
@@ -62,7 +62,7 @@ def test_release_shape_and_literal_fixture_contract() -> None:
 def test_manifest_blocks_prior_semantic_overlap_and_repetition() -> None:
     assert len(PART_CONCEPTS) == len(JAVA_CURRICULUM_PART2)
     assert PRIOR_CONCEPTS.isdisjoint(PART_CONCEPTS)
-    prior = [x for x in JAVA_INTERVIEW_EXERCISES + MULTILANG_EXERCISES if x.get("language") == "java"] + JAVA_CURRICULUM_PART1
+    prior = [x for x in JAVA_PRACTICE_EXERCISES + MULTILANG_EXERCISES if x.get("language") == "java"] + JAVA_CURRICULUM_PART1
     titles = [x["title"].casefold() for x in JAVA_CURRICULUM_PART2]
     sources = [_normalise(x["solution"]) for x in JAVA_CURRICULUM_PART2]
     assert not set(titles).intersection(x["title"].casefold() for x in prior)

@@ -17,7 +17,7 @@ from backend.java_curriculum_part2 import JAVA_CURRICULUM_PART2
 from backend.java_curriculum_part3 import JAVA_CURRICULUM_PART3
 from backend.java_curriculum_part4 import JAVA_CURRICULUM_PART4
 from backend.java_curriculum_part5 import JAVA_CURRICULUM_PART5
-from backend.java_interview_bank import JAVA_INTERVIEW_EXERCISES
+from backend.java_practice_bank import JAVA_PRACTICE_EXERCISES
 from backend.multilang_bank import MULTILANG_EXERCISES
 
 
@@ -93,7 +93,7 @@ def test_no_import_oracle_dead_revisions_or_mojibake() -> None:
 
 
 def test_distinct_from_every_prior_java_reference() -> None:
-    previous = JAVA_INTERVIEW_EXERCISES + MULTILANG_EXERCISES + JAVA_CURRICULUM_PART1 + JAVA_CURRICULUM_PART2 + JAVA_CURRICULUM_PART3 + JAVA_CURRICULUM_PART4
+    previous = JAVA_PRACTICE_EXERCISES + MULTILANG_EXERCISES + JAVA_CURRICULUM_PART1 + JAVA_CURRICULUM_PART2 + JAVA_CURRICULUM_PART3 + JAVA_CURRICULUM_PART4
     previous = [x for x in previous if x.get("language") == "java"]
     titles = [x["title"].casefold() for x in JAVA_CURRICULUM_PART5]
     solutions = [normalise(x["solution"]) for x in JAVA_CURRICULUM_PART5]

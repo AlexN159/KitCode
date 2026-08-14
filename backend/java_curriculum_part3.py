@@ -6,7 +6,7 @@ def P(b: str, h: str="") -> str:
  return f"import java.io.*;\nimport java.util.*;\npublic class Main {{ public static void main(String[] args) throws Exception {{ Scanner in=new Scanner(new BufferedInputStream(System.in));{b} }}{h}}}\n"
 def C(i: str,o: str)->dict[str,str]: return {"input":i,"expected_output":o}
 def D(n:int,t:str,d:str,topic:str,desc:str,con:list[str],hints:list[str],cx:str,sol:str,p:list[dict],q:list[dict])->dict:
- return {"id":f"java-curated-{n:03d}","title":t,"language":"java","difficulty":d,"topics":[topic],"curriculum_family":topic,"interview_frequency":"Common","description":desc,"constraints":con,"hints":hints,"expected_complexity":cx,"starter_code":STARTER,"solution":sol,"public_tests":p,"hidden_tests":q,"examples":[{"input":x["input"],"output":x["expected_output"]} for x in p]}
+ return {"id":f"java-curated-{n:03d}","title":t,"language":"java","difficulty":d,"topics":[topic],"curriculum_family":topic,"practice_frequency":"Common","description":desc,"constraints":con,"hints":hints,"expected_complexity":cx,"starter_code":STARTER,"solution":sol,"public_tests":p,"hidden_tests":q,"examples":[{"input":x["input"],"output":x["expected_output"]} for x in p]}
 
 JAVA_CURRICULUM_PART3=[
 D(101,"Majority Vote","Easy","arrays","Print the value occurring more than n/2 times; a majority is guaranteed.",["1 <= n <= 200000."],["Keep a candidate and vote count.","Reset only at zero votes.","The guarantee removes a verification pass."],"O(n) time, O(1) auxiliary space",P("int n=in.nextInt(),c=0,v=0;for(int i=0;i<n;i++){int x=in.nextInt();if(c==0)v=x;c+=x==v?1:-1;}System.out.println(v);"),[C("3\n2 2 1\n","2"),C("5\n3 3 4 2 3\n","3")],[C("1\n9\n","9"),C("7\n-1 -1 2 -1 3 -1 -1\n","-1"),C("4\n0 0 0 1\n","0"),C("5\n8 7 8 8 7\n","8")]),

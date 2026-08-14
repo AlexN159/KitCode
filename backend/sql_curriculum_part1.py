@@ -1,4 +1,4 @@
-"""Advanced, independently-authored SQLite interview curriculum (25 drills).
+"""Advanced, independently-authored SQLite practice curriculum (25 drills).
 
 This module is deliberately data-only on import.  Reference output is stored in
 ``sql_curriculum_part1_oracles`` and can be replayed through the explicit
@@ -52,7 +52,7 @@ def _item(
     return {
         "id": key, "title": title, "language": "sql", "difficulty": difficulty,
         "topics": [family], "curriculum_family": family,
-        "interview_frequency": "Common", "description": description,
+        "practice_frequency": "Common", "description": description,
         "constraints": ["Write one read-only SELECT or WITH query in the selected dialect.", "The selected dialect is translated for local SQLite compatibility before judging.", "Return columns in exactly the requested order.", SCHEMA],
         "examples": [{"input": "", "output": cases[0]["expected_output"], "explanation": "The example uses one managed dataset; hidden cases change the stated edge conditions."}],
         "starter_code": STARTER, "solution": solution, "hints": list(hints),

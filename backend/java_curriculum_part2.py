@@ -1,6 +1,6 @@
 """Curated Java 17 core drills 81--100.
 
-Every exercise is a standalone stdin/stdout interview contract.  The literal
+Every exercise is a standalone stdin/stdout practice contract.  The literal
 fixtures are intentionally kept beside their reference program; importing this
 module neither runs Java nor computes expected answers.
 """
@@ -39,7 +39,7 @@ def drill(number: int, title: str, difficulty: str, topics: list[str], descripti
           public: list[dict[str, str]], hidden: list[dict[str, str]]) -> dict:
     return {"id": f"java-curated-{number:03d}", "title": title, "language": "java",
             "difficulty": difficulty, "topics": topics, "curriculum_family": topics[0],
-            "interview_frequency": "Common", "description": description,
+            "practice_frequency": "Common", "description": description,
             "constraints": constraints, "hints": hints, "expected_complexity": complexity,
             "starter_code": STARTER, "solution": solution, "public_tests": public,
             "hidden_tests": hidden,

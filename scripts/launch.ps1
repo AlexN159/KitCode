@@ -128,8 +128,8 @@ function Ensure-Java {
 
 try {
     Write-Host ""
-    Write-Host "  KitCode Interview Studio" -ForegroundColor White
-    Write-Host "  Local-first Python, Java, and SQL interview practice" -ForegroundColor DarkGray
+    Write-Host "  KitCode Practice Studio" -ForegroundColor White
+    Write-Host "  Local-first Python, Java, and SQL practice" -ForegroundColor DarkGray
 
     if (Test-Path $envFile) {
         foreach ($line in Get-Content $envFile) {

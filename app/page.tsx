@@ -380,8 +380,8 @@ const practiceLevels: Array<{
   },
   {
     id: "Medium",
-    label: "Interview",
-    description: "Common pair-programming rounds",
+    label: "Practice",
+    description: "Build confidence with common coding tasks",
   },
   {
     id: "Hard",
@@ -749,7 +749,7 @@ function changedLineRange(before: string, after: string) {
   const offset = totalLines;
   let changedIndexes: number[] | null = null;
 
-  // Myers' line diff gives exact modified-line provenance for normal interview
+  // Myers' line diff gives exact modified-line provenance for normal practice
   // scripts. Cap its work and use a clearly labelled affected span for an
   // unusually large/generated file instead of risking a frozen browser.
   if (totalLines <= 4_000) {
@@ -4043,7 +4043,7 @@ export default function Home() {
                 ))}
               </ul>
             </div>
-            <div className="interview-note">
+            <div className="coach-note">
               <span>✦</span>
               <div>
                 <strong>Coach prompt</strong>

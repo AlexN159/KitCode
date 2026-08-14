@@ -7,7 +7,7 @@ from backend import main
 from backend.java_curriculum_part1 import JAVA_CURRICULUM_PART1
 from backend.java_curriculum_part2 import JAVA_CURRICULUM_PART2
 from backend.java_curriculum_part3 import JAVA_CURRICULUM_PART3
-from backend.java_interview_bank import JAVA_INTERVIEW_EXERCISES
+from backend.java_practice_bank import JAVA_PRACTICE_EXERCISES
 from backend.multilang_bank import MULTILANG_EXERCISES
 
 SOURCE=Path("backend/java_curriculum_part3.py")
@@ -27,7 +27,7 @@ def test_shape_literal_fixtures_and_manifest():
  assert sum(x['difficulty']=='Medium' for x in JAVA_CURRICULUM_PART3)==10
  assert sum(x['difficulty']=='Hard' for x in JAVA_CURRICULUM_PART3)==6
 def test_title_and_source_uniqueness_against_registered_java_1_100():
- prior=[x for x in JAVA_INTERVIEW_EXERCISES+MULTILANG_EXERCISES if x.get('language')=='java']+JAVA_CURRICULUM_PART1+JAVA_CURRICULUM_PART2
+ prior=[x for x in JAVA_PRACTICE_EXERCISES+MULTILANG_EXERCISES if x.get('language')=='java']+JAVA_CURRICULUM_PART1+JAVA_CURRICULUM_PART2
  titles=[x['title'].casefold() for x in JAVA_CURRICULUM_PART3]; sources=[_normalise(x['solution']) for x in JAVA_CURRICULUM_PART3]
  assert not set(titles)&{x['title'].casefold() for x in prior}
  assert not set(sources)&{_normalise(x['solution']) for x in prior}

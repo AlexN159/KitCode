@@ -1,4 +1,4 @@
-"""A local, dependency-free bank of Python stdin/stdout interview drills.
+"""A local, dependency-free bank of Python stdin/stdout practice drills.
 
 The catalogue deliberately stores the complete exercise payload used by the UI.
 The runner is intentionally small: it executes a submitted script in an isolated
@@ -239,7 +239,7 @@ def _exercise(
     hidden = [{"input": a, "expected_output": b} for a, b in cases[2:]]
     return {
         "id": key, "title": title, "difficulty": difficulty, "topics": topics,
-        "interview_frequency": frequency, "description": description,
+        "practice_frequency": frequency, "description": description,
         "constraints": constraints, "examples": [_example(*cases[0])],
         "starter_code": STARTER, "hints": hints[:3], "solution": solution,
         "expected_complexity": complexity, "public_tests": public,
@@ -371,7 +371,7 @@ def _string_bank() -> list[dict]:
 def _parametric_bank() -> list[dict]:
     """Exercises whose cases and solutions are individually specified below.
 
-    This section covers the interview patterns that deserve their own problem,
+    This section covers the coding patterns that deserve their own problem,
     rather than disguising the same task under different nouns.
     """
     records = [
@@ -741,7 +741,7 @@ def _hard_bank() -> list[dict]:
 
 
 def _advanced_bank() -> list[dict]:
-    """Interview-pattern drills with deliberately different input contracts."""
+    """Practice drills with deliberately different input contracts."""
     rows = [
       ("advanced-001", "Longest Unique Window", "Medium", ["sliding-window", "strings", "hashing"],
        "Read one line and print the length of its longest substring with no repeated character.",
@@ -1103,7 +1103,7 @@ for _advanced_id, _cases in _ADVANCED_EXTRA_HIDDEN.items():
 def _add_input_framing_coverage() -> None:
     """Give every drill a minimum hidden-test depth without dynamic oracles.
 
-    Full-script exercises frequently fail in interviews because a solution only
+    Full-script exercises frequently fail in practice because a solution only
     reads a convenient first line or makes brittle EOF assumptions.  These
     deterministic hidden variants retain the same semantic payload while
     varying harmless trailing blank-record framing.  Unlike executing stored
@@ -1227,7 +1227,7 @@ for _python_exercise in EXERCISES.values():
     _python_exercise.setdefault("language", "python")
 
 from backend.multilang_bank import MULTILANG_EXERCISES
-from backend.java_interview_bank import JAVA_INTERVIEW_EXERCISES
+from backend.java_practice_bank import JAVA_PRACTICE_EXERCISES
 from backend.python_curated_141_160 import PYTHON_CURATED_141_160
 from backend.python_curated_161_180 import PYTHON_CURATED_161_180
 from backend.python_curated_181_200 import PYTHON_CURATED_181_200
@@ -1244,10 +1244,10 @@ for _multilang_exercise in MULTILANG_EXERCISES:
         raise RuntimeError(f"duplicate exercise id: {_multilang_exercise['id']}")
     EXERCISES[_multilang_exercise["id"]] = _multilang_exercise
 
-for _java_interview_exercise in JAVA_INTERVIEW_EXERCISES:
-    if _java_interview_exercise["id"] in EXERCISES:
-        raise RuntimeError(f"duplicate exercise id: {_java_interview_exercise['id']}")
-    EXERCISES[_java_interview_exercise["id"]] = _java_interview_exercise
+for _java_practice_exercise in JAVA_PRACTICE_EXERCISES:
+    if _java_practice_exercise["id"] in EXERCISES:
+        raise RuntimeError(f"duplicate exercise id: {_java_practice_exercise['id']}")
+    EXERCISES[_java_practice_exercise["id"]] = _java_practice_exercise
 
 for _curated_exercise in (
     *PYTHON_CURATED_141_160,
@@ -1283,7 +1283,7 @@ def _public_view(exercise: dict, include_hidden: bool = False) -> dict:
 
 def get_catalog() -> list[dict]:
     """Return lightweight metadata, deliberately excluding all test input."""
-    return [{key: item[key] for key in ("id", "title", "language", "difficulty", "topics", "interview_frequency", "expected_complexity")}
+    return [{key: item[key] for key in ("id", "title", "language", "difficulty", "topics", "practice_frequency", "expected_complexity")}
             for item in EXERCISES.values()]
 
 
@@ -1307,7 +1307,7 @@ def validate_submission(exercise_id: str, code: str, timeout_seconds: float = 2.
     tests = [("public", item) for item in exercise["public_tests"]] + [("hidden", item) for item in exercise["hidden_tests"]]
     results=[]
     started=time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="python-interview-") as directory:
+    with tempfile.TemporaryDirectory(prefix="python-practice-") as directory:
         program=Path(directory) / "solution.py"
         program.write_text(code, encoding="utf-8")
         for number,(visibility,test) in enumerate(tests,1):

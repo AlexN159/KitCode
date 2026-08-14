@@ -1,1 +1,1 @@
-"""Local API for the Python interview-practice workspace."""
+"""Local API for the Python practice workspace."""

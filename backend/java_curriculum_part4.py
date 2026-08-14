@@ -21,7 +21,7 @@ def D(n, t, d, topic, desc, con, hints, cx, sol, p, q):
         "difficulty": d,
         "topics": [topic],
         "curriculum_family": topic,
-        "interview_frequency": "Common",
+        "practice_frequency": "Common",
         "description": desc,
         "constraints": con,
         "hints": hints,

@@ -7,7 +7,7 @@ ITEMS = []
 def add(num, title, difficulty, topics, description, constraints, hints, complexity, body, cases, explanation):
     records = [{"input": source, "expected_output": result} for source, result in cases]
     ITEMS.append({"id": f"python-curated-{num:03d}", "language": "python", "title": title,
-        "difficulty": difficulty, "topics": topics, "interview_frequency": "Common",
+        "difficulty": difficulty, "topics": topics, "practice_frequency": "Common",
         "description": description, "constraints": constraints, "hints": hints,
         "expected_complexity": complexity, "starter_code": STARTER,
         "solution": "import sys\n" + body.strip() + "\n\nif __name__ == '__main__':\n    solve()\n",

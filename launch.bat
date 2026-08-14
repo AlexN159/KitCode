@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title KitCode Interview Studio
+title KitCode Practice Studio
 cd /d "%~dp0"
 
 where powershell.exe >nul 2>nul

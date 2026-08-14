@@ -1,9 +1,9 @@
-"""A deliberately varied, runnable Java interview-practice curriculum.
+"""A deliberately varied, runnable Java practice curriculum.
 
 Every drill is a complete ``public class Main`` program and has five independent
 stdin/stdout fixtures (the first two are public).  Keeping this catalogue apart
 from the original multi-language seed bank makes it easy to audit that these are
-real interview problems rather than renamed copies of warm-ups.
+real coding problems rather than renamed copies of warm-ups.
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def _drill(key: str, title: str, difficulty: str, topics: list[str], description
         frame["input"] += "\n"
         hidden.append(frame)
     return {"id": key, "title": title, "language": "java", "difficulty": difficulty,
-            "topics": topics, "interview_frequency": "Common", "description": description,
+            "topics": topics, "practice_frequency": "Common", "description": description,
             "constraints": constraints, "examples": [{"input": cases[0][0], "output": cases[0][1]}],
             "starter_code": STARTER, "solution": _program(body), "hints": hints,
             "expected_complexity": complexity, "public_tests": tests[:2], "hidden_tests": hidden}
@@ -130,10 +130,10 @@ _drill("java-int-lru-simulation", "LRU Cache Simulation", "Hard", ["maps", "link
 ]
 
 
-# These are deliberately classified as senior-interview material: each combines
+# These are deliberately classified as advanced practice material: each combines
 # an invariant with a nontrivial representation or correctness argument.
 for _hard_id in {"java-int-course-schedule", "java-int-shortest-path", "java-int-tree-bst",
                  "java-int-coin-change", "java-int-three-sum"}:
     next(item for item in _D if item["id"] == _hard_id)["difficulty"] = "Hard"
 
-JAVA_INTERVIEW_EXERCISES = _D
+JAVA_PRACTICE_EXERCISES = _D

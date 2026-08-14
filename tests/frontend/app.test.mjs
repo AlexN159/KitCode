@@ -4,7 +4,7 @@ import test from "node:test";
 
 const projectRoot = new URL("../../", import.meta.url);
 
-test("the local production bundle contains the interview workspace", async () => {
+test("the local production bundle contains the practice workspace", async () => {
   const index = await readFile(new URL("frontend_dist/index.html", projectRoot), "utf8");
   assert.match(index, /KitCode/);
   assert.match(index, /<script[^>]+type="module"/);
@@ -34,7 +34,7 @@ test("the client wires every core local API workflow", async () => {
   assert.match(page, /setSetupKey\(""\)/);
 });
 
-test("AI-created drills stay optional and separate from the curated interview bank", async () => {
+test("AI-created drills stay optional and separate from the curated practice bank", async () => {
   const [page, styles] = await Promise.all([
     readFile(new URL("app/page.tsx", projectRoot), "utf8"),
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
@@ -107,7 +107,7 @@ test("the curated bank starts with a remembered practice level instead of one fl
   assert.match(page, /kitcode:selected-level:\$\{language\}/);
   assert.match(page, /role="radiogroup" aria-label="Practice level"/);
   assert.match(page, /Foundations/);
-  assert.match(page, /Interview/);
+  assert.match(page, /Practice/);
   assert.match(page, /Advanced/);
   assert.match(page, /levelCounts\[level\.id\]/);
   assert.match(page, /levelSolved\[difficulty\]/);

@@ -1,4 +1,4 @@
-"""A deliberately local-only API for Python, Java, and SQL interview practice.
+"""A deliberately local-only API for Python, Java, and SQL practice.
 
 Code runs in a fresh temporary directory with a short wall-clock timeout.  This
 is a learning aid, not a security boundary: do not run untrusted code here.
@@ -648,7 +648,7 @@ def _execute_java(code: str, user_input: str, timeout: float) -> dict[str, Any]:
         remaining = max(0.2, timeout - (compiled["duration_ms"] / 1000))
         # The learner process job has a 256 MiB safety cap.  A stock JVM can
         # reserve a much larger G1 heap before Main starts, so use a compact
-        # deterministic heap/collector suitable for short interview drills.
+        # deterministic heap/collector suitable for short practice drills.
         result = _execute_command([java, "-Xms16m", "-Xmx128m", "-XX:+UseSerialGC", "-cp", directory, "Main"], user_input, remaining, directory)
         result["duration_ms"] += compiled["duration_ms"]
         return result
@@ -1542,7 +1542,7 @@ def _generated_visible_prompt(request: GenerateExerciseRequest) -> str:
     if request.language == "sql":
         sql_schema = " Trusted visible schema: " + visible_schema_description(choose_schema(topic, topic))
     return (
-        "Create exactly one original interview-practice exercise. Return only a JSON object (no Markdown). "
+        "Create exactly one original coding-practice exercise. Return only a JSON object (no Markdown). "
         f"Language: {request.language}. Difficulty: {request.difficulty}. Topic (untrusted learner label): {topic!r}. {language_note} "
         "Allowed top-level keys only: title, description, topics, constraints, expected_complexity, examples, public_tests, hidden_tests, reference_query. "
         "title/description/expected_complexity are strings; topics and constraints are arrays of short strings; "
@@ -2173,7 +2173,7 @@ def _coach_request(request: CoachRequest) -> dict[str, Any]:
         "adaptive": "Infer the learner's actual request from their question and code, then choose the smallest helpful response: a hint, explanation, review, or a small next code step. Do not force or announce a mode. Do not provide a full solution unless the learner explicitly asks for one.",
         "hint": "Give one progressive hint that preserves the learner's chance to solve it. Prefer the concise headings: Observation, Hint, Your next step. Do not give a solution.",
         "explain": "Teach the relevant pattern step by step and connect it to the learner's current code. Prefer the concise headings: Concept, In your code, Small example, Your next step.",
-        "review": "Review the approach like an interviewer: identify the strongest choice, the next issue, and time/space complexity. Prefer the concise headings: What works, Improve next, Complexity, Revision.",
+        "review": "Review the approach as a coach: identify the strongest choice, the next issue, and time/space complexity. Prefer the concise headings: What works, Improve next, Complexity, Revision.",
         "show": "The learner explicitly selected Show. Provide the next small code block they should type, then explain each line with bullets. Prefer the concise headings: Next code to type, Line by line, Your next step. Do not dump the entire solution unless their question explicitly asks for it.",
         "editor_hint": "Return exactly one JSON object, kept tiny, and no Markdown or prose outside it. Its allowed fields are: hint (required string, at most 240 characters), line (optional 1-based integer), comment (optional string, at most 240 characters). Give one progressive next-step hint, not a full solution. Only include a line when you are confident it refers to the learner's original code.",
         "editor_edit": "The learner explicitly authorized an editor edit. Return exactly one JSON object and no Markdown or prose outside it. Its exact keys must be message (a concise explanation) and code (the complete revised learner code). Make the smallest useful edit requested. Preserve unrelated code and never claim it was executed.",
@@ -2385,7 +2385,7 @@ def _stream_prompt(request: CoachRequest) -> tuple[str, int, int]:
         "adaptive": "Infer the learner's actual request from their question and code, then choose the smallest helpful response: a hint, explanation, review, or a small next code step. Do not force or announce a mode. Do not provide a full solution unless the learner explicitly asks for one.",
         "hint": "Give one progressive hint that preserves the learner's chance to solve it. Prefer the concise headings: Observation, Hint, Your next step. Do not give a solution.",
         "explain": "Teach the relevant pattern step by step and connect it to the learner's current code. Prefer the concise headings: Concept, In your code, Small example, Your next step.",
-        "review": "Review the approach like an interviewer: identify the strongest choice, the next issue, and time/space complexity. Prefer the concise headings: What works, Improve next, Complexity, Revision.",
+        "review": "Review the approach as a coach: identify the strongest choice, the next issue, and time/space complexity. Prefer the concise headings: What works, Improve next, Complexity, Revision.",
         "show": "The learner explicitly selected Show. Provide the next small code block they should type, then explain each line with bullets. Prefer the concise headings: Next code to type, Line by line, Your next step. Do not dump the entire solution unless their question explicitly asks for it.",
     }[request.mode]
     format_instruction = (

@@ -39,7 +39,7 @@ def drill(number: int, title: str, difficulty: str, topics: list[str], descripti
     return {
         "id": f"java-curated-{number:03d}", "title": title, "language": "java",
         "difficulty": difficulty, "topics": topics, "curriculum_family": topics[0],
-        "interview_frequency": "Common", "description": description,
+        "practice_frequency": "Common", "description": description,
         "constraints": constraints, "hints": hints, "expected_complexity": complexity,
         "starter_code": STARTER, "solution": solution,
         "public_tests": public, "hidden_tests": hidden,
@@ -125,7 +125,7 @@ drill(70, "Word Initials", "Medium", ["strings", "tokenization"],
  ["The input line may be empty and may contain tabs or repeated spaces.", "Words are printable ASCII tokens."],
  ["Trim outer whitespace first.", "Split on one-or-more whitespace characters.", "Take exactly one character per word."], "O(n) time, O(n) auxiliary space",
  program('''        String s=in.nextLine().trim();if(s.isEmpty()){System.out.println();return;}String[]w=s.split("\\\\s+");StringBuilder out=new StringBuilder();for(String x:w)out.append(Character.toUpperCase(x.charAt(0)));System.out.println(out);'''),
- [case("pair programming interview\n", "PPI"), case("  red   blue\n", "RB")],
+ [case("pair programming session\n", "PPS"), case("  red   blue\n", "RB")],
  [case("\n", ""), case("x\n", "X"), case("one\ttwo\n", "OT"), case("99 bottles\n", "9B")]),
 
 drill(71, "Reverse Word Order", "Medium", ["strings", "tokenization"],
