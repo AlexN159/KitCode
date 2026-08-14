@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: true
+  # Explicitly reject stale starter-package hooks if an old node_modules tree
+  # is present; neither package is part of this local app.
+  sharp: false
+  workerd: false

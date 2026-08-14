@@ -1,0 +1,47 @@
+# Local dependencies and generated builds
+/node_modules
+/.pnpm-store/
+/.venv/
+/dist/
+/out/
+/.next/
+/.vinext/
+/.wrangler/
+/outputs/
+/work/
+/coverage/
+/artwork/mascots/previews/
+*.tsbuildinfo
+
+# Secrets and learner-specific state
+.env*
+!.env.example
+/data/
+/tmp/
+
+# Runtime/editor noise
+*.log
+*.pem
+.DS_Store
+/.pytest_cache/
+/.mypy_cache/
+/.ruff_cache/
+/htmlcov/
+/.tmp/
+__pycache__/
+*.py[cod]
+*.pid
+
+# Coverage, credentials, local databases, and signing material
+.coverage
+.coverage.*
+/auth.json
+/credentials.json
+*.db
+*.sqlite
+*.sqlite3
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
