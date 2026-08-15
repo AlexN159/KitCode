@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
-import { access, readFile, readdir, stat } from "node:fs/promises";
+import { access, readFile as readRawFile, readdir, stat } from "node:fs/promises";
 import test from "node:test";
 
 const projectRoot = new URL("../../", import.meta.url);
+
+async function readFile(url, encoding) {
+  const contents = await readRawFile(url, encoding);
+  return typeof contents === "string" ? contents.replaceAll("\r\n", "\n") : contents;
+}
 
 test("the local production bundle contains the practice workspace", async () => {
   const index = await readFile(new URL("frontend_dist/index.html", projectRoot), "utf8");
