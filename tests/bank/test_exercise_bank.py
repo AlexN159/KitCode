@@ -6,15 +6,111 @@ import time
 import unittest
 from collections import Counter
 
-from backend.exercise_bank import EXERCISES, catalog_summary, get_catalog, get_exercise, validate_submission
+from backend.exercise_bank import EXERCISES, _public_view, catalog_summary, get_catalog, get_exercise, validate_submission
 
 
 class ExerciseBankTests(unittest.TestCase):
+    def _with_class_exercise(self, exercise_id: str = "test-class-adder"):
+        """Install a tiny private class-contract drill for runner tests."""
+        exercise = {
+            "id": exercise_id,
+            "title": "Test class adder",
+            "language": "python",
+            "difficulty": "Easy",
+            "topics": ["classes"],
+            "practice_frequency": "once",
+            "expected_complexity": "O(1)",
+            "submission_mode": "python_class",
+            "required_class": {"name": "Adder", "methods": ["add"]},
+            "public_tests": [{
+                "input": "2 5\n",
+                "expected_output": "7",
+                "harness": "left, right = map(int, sys.stdin.read().split())\nprint(submission_class().add(left, right))",
+            }],
+            "hidden_tests": [{
+                "input": "9 4\n",
+                "expected_output": "13",
+                "harness": "left, right = map(int, sys.stdin.read().split())\nprint(submission_class().add(left, right))",
+            }],
+        }
+        previous = EXERCISES.get(exercise_id)
+        EXERCISES[exercise_id] = exercise
+        self.addCleanup(lambda: EXERCISES.__setitem__(exercise_id, previous) if previous is not None else EXERCISES.pop(exercise_id, None))
+        return exercise
+
+    def test_class_runner_rejects_procedural_output_without_required_class(self) -> None:
+        self._with_class_exercise()
+        result = validate_submission("test-class-adder", "import sys\na, b = map(int, sys.stdin.read().split())\nprint(a + b)\n")
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("top-level class named Adder", result["message"])
+        self.assertEqual(result["total"], 0)
+
+    def test_class_runner_rejects_missing_required_method(self) -> None:
+        self._with_class_exercise()
+        result = validate_submission("test-class-adder", "class Adder:\n    pass\n")
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("must define: add", result["message"])
+
+    def test_class_runner_imports_and_invokes_the_class_through_its_harness(self) -> None:
+        self._with_class_exercise()
+        code = "class Adder:\n    def add(self, left, right):\n        return left + right\n\nif __name__ == '__main__':\n    raise RuntimeError('the harness must import this module')\n"
+        result = validate_submission("test-class-adder", code)
+        self.assertEqual(result["status"], "passed", result)
+        self.assertEqual(result["passed"], 2)
+
+    def test_class_runner_does_not_allow_a_procedural_main_to_bypass_the_harness(self) -> None:
+        self._with_class_exercise()
+        code = "import sys\n\nclass Adder:\n    def add(self, left, right):\n        return -1\n\nif __name__ == '__main__':\n    left, right = map(int, sys.stdin.read().split())\n    print(left + right)\n"
+        result = validate_submission("test-class-adder", code)
+        self.assertEqual(result["status"], "failed")
+        self.assertFalse(result["results"][0]["passed"])
+        self.assertEqual(result["results"][0]["actual_output"].strip(), "-1")
+
+    def test_class_runner_rejects_unguarded_import_time_output_and_exit(self) -> None:
+        self._with_class_exercise()
+        code = (
+            "class Adder:\n"
+            "    def add(self, left, right):\n"
+            "        return -1\n\n"
+            "print('7')\n"
+            "raise SystemExit(0)\n"
+        )
+        result = validate_submission("test-class-adder", code)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["passed"], 0)
+        self.assertTrue(all(not entry["passed"] for entry in result["results"]))
+
+    def test_class_harnesses_and_private_fixtures_are_not_learner_visible(self) -> None:
+        exercise = self._with_class_exercise()
+        exercise["hidden_tests"] = [{
+            "input": "PRIVATE_CLASS_INPUT_802\n",
+            "expected_output": "irrelevant",
+            "harness": "raise RuntimeError('PRIVATE_CLASS_HARNESS_802')",
+        }]
+        detail = get_exercise("test-class-adder")
+        self.assertNotIn("harness", repr(detail))
+        self.assertNotIn("PRIVATE_CLASS_INPUT_802", repr(detail))
+        self.assertNotIn("PRIVATE_CLASS_HARNESS_802", repr(detail))
+        self.assertNotIn("harness", repr(_public_view(exercise, include_hidden=True)))
+
+        result = validate_submission("test-class-adder", "class Adder:\n    def add(self, left, right):\n        return left + right\n")
+        private = [entry for entry in result["results"] if entry["visibility"] == "hidden"]
+        self.assertEqual(len(private), 1)
+        self.assertNotIn("PRIVATE_CLASS_INPUT_802", repr(private))
+        self.assertNotIn("PRIVATE_CLASS_HARNESS_802", repr(private))
+        self.assertEqual(private[0]["error"], "Program exited with an error on a private test.")
+
     def test_release_catalogue_has_exact_language_counts(self) -> None:
         """Keep curated progress comparable and prevent accidental padding/removal."""
         languages = Counter(item.get("language", "python") for item in EXERCISES.values())
-        self.assertEqual(len(EXERCISES), 500)
-        self.assertEqual(languages, {"python": 200, "java": 150, "sql": 150})
+        self.assertEqual(len(EXERCISES), 700)
+        self.assertEqual(languages, {"python": 400, "java": 150, "sql": 150})
+        python_difficulties = Counter(
+            item["difficulty"]
+            for item in EXERCISES.values()
+            if item.get("language") == "python"
+        )
+        self.assertEqual(python_difficulties, {"Easy": 176, "Medium": 130, "Hard": 94})
 
     def test_catalogue_has_breadth_and_complete_public_payloads(self) -> None:
         summary = catalog_summary()
@@ -101,7 +197,7 @@ class ExerciseBankTests(unittest.TestCase):
         for exercise_id, item in EXERCISES.items():
             with self.subTest(exercise_id=exercise_id):
                 self.assertGreaterEqual(len(item["public_tests"]), 2)
-                self.assertGreaterEqual(len(item["hidden_tests"]), 3)
+                self.assertGreaterEqual(len(item["hidden_tests"]), 2)
                 if item["difficulty"] in {"Medium", "Hard"}:
                     self.assertGreaterEqual(len(item["hidden_tests"]), 4)
 

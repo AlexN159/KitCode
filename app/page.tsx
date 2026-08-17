@@ -6,6 +6,12 @@ import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
 import "monaco-editor/esm/vs/basic-languages/sql/sql.contribution";
 import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import {
+  clearCoachConversationsForExercise,
+  coachConversationScope,
+  readCoachConversation,
+  writeCoachConversation,
+} from "./coach-conversation-storage";
 import { readCoachStream } from "./coach-stream";
 import {
   clearPersistedDraft,
@@ -17,7 +23,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
 } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 type Example = {
   input: string;
   output: string;
@@ -46,6 +52,8 @@ type Problem = {
   hints?: string[];
   starter_code?: string;
   expected_complexity?: string;
+  submission_mode?: "python_class";
+  required_class?: { name: string; methods: string[] };
   language?: PracticeLanguage;
   source?: "curated" | "ai_generated";
 };
@@ -1170,6 +1178,7 @@ export default function Home() {
     id: number;
   } | null>(null);
   const [messages, setMessages] = useState<CoachMessage[]>([coachWelcome]);
+  const messagesRef = useRef(messages);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
   const decorationRef = useRef<string[]>([]);
@@ -1198,6 +1207,7 @@ export default function Home() {
   const messageSequenceRef = useRef(0);
   const pendingCoachSnapshotRef = useRef<CoachRequestSnapshot | null>(null);
   const coachIdentityRef = useRef(coachRuntimeIdentity(aiStatus));
+  const coachConversationScopeRef = useRef("");
   const aiStatusRef = useRef(aiStatus);
   const celebratedWorkflowRef = useRef<number | null>(null);
   const celebrationSequenceRef = useRef(0);
@@ -1226,6 +1236,36 @@ export default function Home() {
   const activeCelebrationId = celebration?.id;
   const activeMascotMomentId = mascotMoment?.id;
   const currentCoachRuntimeIdentity = coachRuntimeIdentity(aiStatus);
+  const coachMessagesForStorage = useCallback((): CoachMessage[] => {
+    const streamingId = coachStreamingMessageRef.current;
+    const streamedText = coachStreamTextRef.current;
+    if (!streamingId || !streamedText) return messagesRef.current;
+    return messagesRef.current.map((message) =>
+      message.id === streamingId
+        ? { ...message, text: streamedText, contextual: false }
+        : message,
+    );
+  }, []);
+  const flushCoachConversationToStorage = useCallback(() => {
+    const scope = coachConversationScopeRef.current;
+    if (!scope) return;
+    try {
+      const [language, exerciseId, runtimeIdentity] = JSON.parse(scope) as [
+        string,
+        string,
+        string,
+      ];
+      writeCoachConversation(
+        window.localStorage,
+        language,
+        exerciseId,
+        runtimeIdentity,
+        coachMessagesForStorage(),
+      );
+    } catch {
+      /* Leaving or switching remains safe when local storage is unavailable. */
+    }
+  }, [coachMessagesForStorage]);
   useEffect(() => {
     aiStatusRef.current = aiStatus;
   }, [aiStatus]);
@@ -1427,8 +1467,83 @@ export default function Home() {
     setEditorEdit(null);
     setPendingEditorEdit(null);
     setHintNotice("");
-    setMessages([coachWelcome]);
   }, [currentCoachRuntimeIdentity]);
+  useEffect(() => {
+    if (!selected) return;
+    const scope = coachConversationScope(
+      selectedLanguage,
+      selected,
+      currentCoachRuntimeIdentity,
+    );
+    if (coachConversationScopeRef.current !== scope) {
+      const previousScope = coachConversationScopeRef.current;
+      if (previousScope) {
+        try {
+          const [previousLanguage, previousExercise, previousRuntime] =
+            JSON.parse(previousScope) as [string, string, string];
+          writeCoachConversation(
+            window.localStorage,
+            previousLanguage,
+            previousExercise,
+            previousRuntime,
+            coachMessagesForStorage(),
+          );
+        } catch {
+          /* A provider change must still work when storage is unavailable. */
+        }
+      }
+      coachConversationScopeRef.current = scope;
+      let restored: ReturnType<typeof readCoachConversation> = [];
+      try {
+        restored = readCoachConversation(
+          window.localStorage,
+          selectedLanguage,
+          selected,
+          currentCoachRuntimeIdentity,
+        );
+      } catch {
+        /* A fresh conversation remains available when storage is blocked. */
+      }
+      const restoredMessages: CoachMessage[] = [
+        coachWelcome,
+        ...restored.map((message) => ({
+          ...message,
+          id: `message-${++messageSequenceRef.current}`,
+        })),
+      ];
+      messagesRef.current = restoredMessages;
+      setMessages(restoredMessages);
+      return;
+    }
+    const saveTimer = window.setTimeout(() => {
+      try {
+        writeCoachConversation(
+          window.localStorage,
+          selectedLanguage,
+          selected,
+          currentCoachRuntimeIdentity,
+          coachMessagesForStorage(),
+        );
+      } catch {
+        /* The visible conversation remains available for this session. */
+      }
+    }, 150);
+    return () => window.clearTimeout(saveTimer);
+  }, [
+    coachMessagesForStorage,
+    currentCoachRuntimeIdentity,
+    messages,
+    selected,
+    selectedLanguage,
+  ]);
+  useEffect(() => {
+    const flushBeforeLeaving = () => flushCoachConversationToStorage();
+    window.addEventListener("pagehide", flushBeforeLeaving);
+    return () => {
+      flushBeforeLeaving();
+      window.removeEventListener("pagehide", flushBeforeLeaving);
+    };
+  }, [flushCoachConversationToStorage]);
   useEffect(
     () => () => {
       coachGenerationRef.current += 1;
@@ -1570,7 +1685,6 @@ export default function Home() {
         setEditorEdit(null);
         setPendingEditorEdit(null);
         setHintNotice("");
-        setMessages([coachWelcome]);
         if (exercise.source === "ai_generated")
           setGeneratedProblems((all) =>
             all.map((item) =>
@@ -1625,7 +1739,6 @@ export default function Home() {
         setEditorEdit(null);
         setPendingEditorEdit(null);
         setHintNotice("");
-        setMessages([coachWelcome]);
         const local = problems.find((item) => item.id === selected);
         let savedDraft: string | null = null;
         try {
@@ -2076,12 +2189,24 @@ export default function Home() {
       coachStreamFrameRef.current = null;
     }
     const text = coachStreamTextRef.current;
+    messagesRef.current = messagesRef.current.map((message) =>
+      message.id === id ? { ...message, text, contextual } : message,
+    );
     setMessages((all) =>
       all.map((message) =>
         message.id === id ? { ...message, text, contextual } : message,
       ),
     );
     window.requestAnimationFrame(scrollCoachToLatestIfNearBottom);
+  }
+  // Keep a synchronous copy so pagehide and a rapid exercise change cannot
+  // miss a message React has not rendered yet.
+  function replaceCoachMessages(nextMessages: CoachMessage[]) {
+    messagesRef.current = nextMessages;
+    setMessages(nextMessages);
+  }
+  function appendCoachMessage(message: CoachMessage) {
+    replaceCoachMessages([...messagesRef.current, message]);
   }
   function queueStreamingCoachMessage(id: string) {
     if (coachStreamFrameRef.current !== null) return;
@@ -2131,7 +2256,7 @@ export default function Home() {
     setPendingCoachIntent("adaptive");
     if (discardVisibleHint) setEditorHint(null);
     setHintNotice("");
-    if (resetConversation) setMessages([coachWelcome]);
+    if (resetConversation) replaceCoachMessages([coachWelcome]);
   }
   function clearEditorHint() {
     setEditorHint(null);
@@ -2195,15 +2320,12 @@ export default function Home() {
     setCode(edit.after);
     setPendingEditorEdit(null);
     setEditorEdit(edit);
-    setMessages((all) => [
-      ...all,
-      {
-        id: `message-${++messageSequenceRef.current}`,
-        role: "coach",
-        text: `${edit.message}\n\nI applied this as a highlighted, undoable editor edit. Review it before running.`,
-        contextual: true,
-      },
-    ]);
+    appendCoachMessage({
+      id: `message-${++messageSequenceRef.current}`,
+      role: "coach",
+      text: `${edit.message}\n\nI applied this as a highlighted, undoable editor edit. Review it before running.`,
+      contextual: true,
+    });
     setStatus(
       `AI edited ${edit.startLine === edit.endLine ? `line ${edit.startLine}` : `lines ${edit.startLine}–${edit.endLine}`} · review before running`,
     );
@@ -2211,6 +2333,11 @@ export default function Home() {
     editor.focus();
   }
   function selectExercise(exerciseId: string) {
+    if (exerciseId === selected) {
+      setProblemDrawerOpen(false);
+      return;
+    }
+    flushCoachConversationToStorage();
     try {
       window.localStorage.setItem(
         `kitcode:selected-exercise:${selectedLanguage}`,
@@ -2219,6 +2346,7 @@ export default function Home() {
     } catch {
       /* Current session selection still works. */
     }
+    coachConversationScopeRef.current = "";
     cancelCoachWork(true, true);
     clearEditorEdit();
     setDraftReady(false);
@@ -2237,6 +2365,8 @@ export default function Home() {
   }
   function selectLanguage(language: PracticeLanguage) {
     if (language === selectedLanguage) return;
+    flushCoachConversationToStorage();
+    coachConversationScopeRef.current = "";
     cancelCoachWork(true, true);
     clearEditorEdit();
     setDraftReady(false);
@@ -2669,7 +2799,7 @@ export default function Home() {
   async function deleteGeneratedProblem(exerciseId: string) {
     if (
       !window.confirm(
-        "Remove this AI-made drill? Its saved draft and generated completion progress will also be removed.",
+        "Remove this AI-made drill? Its saved draft, coach conversation, and generated completion progress will also be removed.",
       )
     )
       return;
@@ -2693,6 +2823,17 @@ export default function Home() {
       }
       if (selectedRef.current === exerciseId)
         selectExercise(problems[0]?.id ?? "");
+      try {
+        // Selecting a replacement flushes the visible discussion first; clear
+        // the deleted drill after that flush so it cannot be recreated.
+        clearCoachConversationsForExercise(
+          window.localStorage,
+          selectedLanguage,
+          exerciseId,
+        );
+      } catch {
+        /* The server removal remains complete when storage is unavailable. */
+      }
       setGeneratedNotice("AI drill removed.");
     } catch (error) {
       setGeneratedNotice(
@@ -2895,10 +3036,12 @@ export default function Home() {
     let streamedMessageId: string | null = null;
     if (snapshot.intent === "adaptive" || snapshot.intent === "edit") {
       const id = `message-${++messageSequenceRef.current}`;
-      setMessages((all) => [
-        ...all,
-        { id, role: "you", text: snapshot.question, contextual: true },
-      ]);
+      appendCoachMessage({
+        id,
+        role: "you",
+        text: snapshot.question,
+        contextual: true,
+      });
     } else setHintNotice("Finding one useful next step…");
     try {
       const endpoint =
@@ -2956,7 +3099,7 @@ export default function Home() {
           streamedMessageId = id;
           coachStreamingMessageRef.current = id;
           coachStreamTextRef.current = "";
-          setMessages((all) => [...all, { id, role: "coach", text: "", contextual: false }]);
+          appendCoachMessage({ id, role: "coach", text: "", contextual: false });
           window.requestAnimationFrame(scrollCoachToLatestIfNearBottom);
           let completed = false;
           let provider = "";
@@ -3003,10 +3146,7 @@ export default function Home() {
             "The coach returned an empty reply. Please try again.",
           );
         const id = `message-${++messageSequenceRef.current}`;
-        setMessages((all) => [
-          ...all,
-          { id, role: "coach", text: reply, contextual: true },
-        ]);
+        appendCoachMessage({ id, role: "coach", text: reply, contextual: true });
         showMascotComplete();
         return;
       }
@@ -3039,15 +3179,12 @@ export default function Home() {
           message: editMessage,
           undoAvailable: true,
         });
-        setMessages((all) => [
-          ...all,
-          {
-            id: `message-${++messageSequenceRef.current}`,
-            role: "coach",
-            text: `${editMessage}\n\nI prepared a code change. Review the summary beside the editor, then choose Apply AI edit if you want it written into your script.`,
-            contextual: true,
-          },
-        ]);
+        appendCoachMessage({
+          id: `message-${++messageSequenceRef.current}`,
+          role: "coach",
+          text: `${editMessage}\n\nI prepared a code change. Review the summary beside the editor, then choose Apply AI edit if you want it written into your script.`,
+          contextual: true,
+        });
         setStatus("AI edit ready · review and apply");
         showMascotComplete();
         return;
@@ -3093,10 +3230,7 @@ export default function Home() {
           coachStreamingMessageRef.current = null;
         } else {
           const id = `message-${++messageSequenceRef.current}`;
-          setMessages((all) => [
-            ...all,
-            { id, role: "coach", text: detail, contextual: false },
-          ]);
+          appendCoachMessage({ id, role: "coach", text: detail, contextual: false });
         }
         if (snapshot.intent === "edit")
           setStatus("AI editor request failed · your code was not changed");
@@ -4016,6 +4150,17 @@ export default function Home() {
                 </p>
               </aside>
             )}
+            {current.submission_mode === "python_class" && (
+              <aside className="class-submission-note" role="note">
+                <strong>Class API exercise</strong>
+                <p>
+                  Run uses the included command-line demo. Submit imports your
+                  {current.required_class?.name
+                    ? ` ${current.required_class.name} class`
+                    : " class"} and tests its methods directly.
+                </p>
+              </aside>
+            )}
             <div className="statement">
               <p>{current.description ?? "Loading drill…"}</p>
               {(current.examples ?? []).map((example, index) => {
@@ -4637,7 +4782,7 @@ export default function Home() {
                   ? "Codex is responding…"
                   : "Coach is responding…"
                 : aiStatus.configured
-                  ? `Using ${selectedProvider} · Enter to send`
+                  ? `Using ${selectedProvider} · Enter to send · saved locally for this exercise and AI setup`
                   : "AI unavailable"}
             </span>
             <button

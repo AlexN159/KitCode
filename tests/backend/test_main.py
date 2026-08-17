@@ -386,6 +386,18 @@ def test_sql_runner_caps_rows_and_does_not_expose_fixture(tmp_path, monkeypatch)
     assert rejected["ok"] is False
 
 
+def test_catalogue_item_does_not_expose_class_judge_harness():
+    item = {
+        "id": "class-secret",
+        "title": "Class Secret",
+        "public_tests": [{"input": "2\n", "expected_output": "3\n", "harness": "PRIVATE_HARNESS"}],
+        "hidden_tests": [],
+    }
+    public = main._safe_catalog_item(item)
+    assert public["public_tests"] == [{"input": "2\n", "expected_output": "3\n"}]
+    assert "PRIVATE_HARNESS" not in repr(public)
+
+
 def test_launcher_uses_real_temurin_user_install_path():
     launcher = (main.APP_DIR.parent / "scripts" / "launch.ps1").read_text(encoding="utf-8")
     assert '"Programs\\Eclipse Adoptium"' in launcher

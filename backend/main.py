@@ -234,7 +234,7 @@ def _safe_catalog_item(item: dict[str, Any]) -> dict[str, Any]:
         # private judge data even when the corresponding expected row set is
         # a public test.
         result["public_tests"] = [
-            {key: value for key, value in test.items() if key not in {"setup_sql", "sql_setup"}}
+            {key: value for key, value in test.items() if key not in {"setup_sql", "sql_setup", "harness"}}
             for test in result["public_tests"] if isinstance(test, dict)
         ]
     result.setdefault("language", "python")

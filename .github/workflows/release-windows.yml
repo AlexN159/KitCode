@@ -21,6 +21,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Python for the curriculum gate
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install backend test dependencies
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
@@ -39,6 +48,21 @@ jobs:
       - name: Build and test the learner interface
         shell: pwsh
         run: pnpm test
+
+      # Keep this deliberately focused: it verifies the release catalogue,
+      # every class-contract pathway, and independent Hard-exercise oracles
+      # without rerunning the slower exhaustive per-fixture suites on a tag.
+      - name: Verify the Python curriculum
+        shell: pwsh
+        run: |
+          python -m pytest -q --maxfail=1 `
+            tests/backend/test_main.py `
+            tests/bank/test_exercise_bank.py `
+            tests/bank/test_python_oop_curriculum.py `
+            tests/bank/test_python_curated_354_393_audit.py `
+            tests/bank/test_python_curated_201_288.py `
+            tests/bank/test_python_curated_289_353.py `
+            -k "catalogue_item_does_not_expose_class or release_catalogue or catalogue_has_breadth or every_exercise_has_a_private_test_floor or class_runner or class_harnesses or cross_level or real_class or promised_language or procedural_and_dummy or contiguous_hard or seeded or geometry_dp or line_tiling or final_tree or remaining_final or isomorphism or convex_ray or manifest_is_exactly or complete_runner_schema or data_only or representative_contracts or ids_schema or literal_fixtures or final_eight"
 
       - name: Build the Windows learner ZIP
         shell: pwsh

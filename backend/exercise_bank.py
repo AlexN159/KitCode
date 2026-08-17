@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import ast
 import json
 import os
 import signal
@@ -1242,6 +1243,17 @@ from backend.java_practice_bank import JAVA_PRACTICE_EXERCISES
 from backend.python_curated_141_160 import PYTHON_CURATED_141_160
 from backend.python_curated_161_180 import PYTHON_CURATED_161_180
 from backend.python_curated_181_200 import PYTHON_CURATED_181_200
+from backend.python_curated_201_288 import PYTHON_CURATED_201_288
+from backend.python_curated_289_353 import PYTHON_CURATED_289_353
+from backend.python_curated_354_358 import PYTHON_CURATED_354_358
+from backend.python_curated_359_363 import PYTHON_CURATED_359_363
+from backend.python_curated_364_368 import PYTHON_CURATED_364_368
+from backend.python_curated_369_373 import PYTHON_CURATED_369_373
+from backend.python_curated_374_378 import PYTHON_CURATED_374_378
+from backend.python_curated_379_383 import PYTHON_CURATED_379_383
+from backend.python_curated_384_388 import PYTHON_CURATED_384_388
+from backend.python_curated_389_393 import PYTHON_CURATED_389_393
+from backend.python_curated_394_400 import PYTHON_CURATED_394_400
 from backend.java_curriculum_part1 import JAVA_CURRICULUM_PART1
 from backend.java_curriculum_part2 import JAVA_CURRICULUM_PART2
 from backend.java_curriculum_part3 import JAVA_CURRICULUM_PART3
@@ -1264,6 +1276,17 @@ for _curated_exercise in (
     *PYTHON_CURATED_141_160,
     *PYTHON_CURATED_161_180,
     *PYTHON_CURATED_181_200,
+    *PYTHON_CURATED_201_288,
+    *PYTHON_CURATED_289_353,
+    *PYTHON_CURATED_354_358,
+    *PYTHON_CURATED_359_363,
+    *PYTHON_CURATED_364_368,
+    *PYTHON_CURATED_369_373,
+    *PYTHON_CURATED_374_378,
+    *PYTHON_CURATED_379_383,
+    *PYTHON_CURATED_384_388,
+    *PYTHON_CURATED_389_393,
+    *PYTHON_CURATED_394_400,
     *JAVA_CURRICULUM_PART1,
     *JAVA_CURRICULUM_PART2,
     *JAVA_CURRICULUM_PART3,
@@ -1284,11 +1307,19 @@ def _public_view(exercise: dict, include_hidden: bool = False) -> dict:
     data = {key: value for key, value in exercise.items() if key not in {"hidden_tests", "sql_setup", "setup_sql"}}
     if "public_tests" in data:
         data["public_tests"] = [
-            {key: value for key, value in test.items() if key not in {"setup_sql", "sql_setup"}}
+            # A class-exercise harness is judge-owned executable code.  It is
+            # deliberately not part of the learner-visible contract, even for
+            # sample cases, so that submissions cannot tailor themselves to it.
+            {key: value for key, value in test.items() if key not in {"setup_sql", "sql_setup", "harness"}}
             for test in data["public_tests"]
         ]
     if include_hidden:
-        data["hidden_tests"] = exercise["hidden_tests"]
+        # Internal callers occasionally request fixture data, but a harness is
+        # still judge implementation detail rather than exercise metadata.
+        data["hidden_tests"] = [
+            {key: value for key, value in test.items() if key != "harness"}
+            for test in exercise["hidden_tests"]
+        ]
     return data
 
 
@@ -1303,6 +1334,83 @@ def get_exercise(exercise_id: str) -> dict | None:
     return _public_view(exercise) if exercise else None
 
 
+def _class_requirement(exercise: dict) -> tuple[str, tuple[str, ...]] | None:
+    """Return a validated class contract for object-oriented Python drills.
+
+    ``submission_mode`` keeps the standard script runner as the default.  A
+    class exercise instead declares e.g. ``{"name": "Counter", "methods":
+    ["total"]}``.  The metadata is authored by this trusted exercise bank, but
+    validating it here prevents a malformed record from changing runner
+    behaviour unpredictably.
+    """
+    if exercise.get("submission_mode") != "python_class":
+        return None
+    requirement = exercise.get("required_class")
+    if not isinstance(requirement, dict):
+        return None
+    name = requirement.get("name")
+    methods = requirement.get("methods")
+    if (not isinstance(name, str) or not name.isidentifier()
+            or not isinstance(methods, list) or not methods
+            or any(not isinstance(method, str) or not method.isidentifier() for method in methods)):
+        return None
+    return name, tuple(methods)
+
+
+def _validate_python_class_source(code: str, requirement: tuple[str, tuple[str, ...]]) -> str | None:
+    """Require the declared top-level class and direct method definitions."""
+    class_name, methods = requirement
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as exc:
+        return f"Syntax error: {exc.msg}."
+    target = next((node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name), None)
+    if target is None:
+        return f"Define a top-level class named {class_name}."
+    available = {node.name for node in target.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    missing = [method for method in methods if method not in available]
+    if missing:
+        joined = ", ".join(missing)
+        return f"Class {class_name} must define: {joined}."
+    return None
+
+
+def _class_harness_source(program: Path, class_name: str, harness: str) -> str:
+    """Build a judge wrapper that imports, rather than executes, learner code.
+
+    The harness is trusted exercise data and is stored only in the private test
+    fixture.  It receives ``submission_class`` and ``submission_module`` and
+    owns reading stdin and writing stdout for its particular contract.
+    """
+    return "\n".join((
+        "import contextlib",
+        "import importlib.util",
+        "import io",
+        "import sys",
+        "_kitcode_test_input = sys.stdin.read()",
+        "_kitcode_import_stdout = io.StringIO()",
+        "_kitcode_import_stderr = io.StringIO()",
+        "sys.stdin = io.StringIO('')",
+        f"_spec = importlib.util.spec_from_file_location('kitcode_submission', {str(program)!r})",
+        "if _spec is None or _spec.loader is None:",
+        "    raise RuntimeError('Could not load the submission module.')",
+        "submission_module = importlib.util.module_from_spec(_spec)",
+        "sys.modules[_spec.name] = submission_module",
+        "try:",
+        "    with contextlib.redirect_stdout(_kitcode_import_stdout), contextlib.redirect_stderr(_kitcode_import_stderr):",
+        "        _spec.loader.exec_module(submission_module)",
+        "except SystemExit as _kitcode_exit:",
+        "    raise RuntimeError('Do not exit while defining the required class.') from _kitcode_exit",
+        "if _kitcode_import_stdout.getvalue() or _kitcode_import_stderr.getvalue():",
+        "    raise RuntimeError('Do not print while defining the required class.')",
+        "sys.stdin = io.StringIO(_kitcode_test_input)",
+        f"submission_class = getattr(submission_module, {class_name!r})",
+        "# The following judge-owned harness reads stdin and calls the class.",
+        harness,
+        "",
+    ))
+
+
 def validate_submission(exercise_id: str, code: str, timeout_seconds: float = 2.0) -> dict:
     """Run public and hidden cases, returning safe result metadata for the UI.
 
@@ -1315,6 +1423,13 @@ def validate_submission(exercise_id: str, code: str, timeout_seconds: float = 2.
         return {"status": "not_found", "message": "Unknown exercise id.", "passed": 0, "total": 0, "results": []}
     if not isinstance(code, str) or not code.strip():
         return {"status": "invalid", "message": "Submit a non-empty Python script.", "passed": 0, "total": 0, "results": []}
+    class_requirement = _class_requirement(exercise)
+    if exercise.get("submission_mode") == "python_class":
+        if class_requirement is None:
+            return {"status": "invalid", "message": "This class exercise has an invalid judge contract.", "passed": 0, "total": 0, "results": []}
+        source_error = _validate_python_class_source(code, class_requirement)
+        if source_error:
+            return {"status": "failed", "message": source_error, "passed": 0, "total": 0, "results": []}
     tests = [("public", item) for item in exercise["public_tests"]] + [("hidden", item) for item in exercise["hidden_tests"]]
     results=[]
     started=time.perf_counter()
@@ -1329,7 +1444,15 @@ def validate_submission(exercise_id: str, code: str, timeout_seconds: float = 2.
                     if name in os.environ
                 }
                 safe_environment.update({"PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONHASHSEED": "0"})
-                submission = _SubmissionProcess([sys.executable, "-I", str(program)], stdin=subprocess.PIPE,
+                command = [sys.executable, "-I", str(program)]
+                if class_requirement is not None:
+                    harness = test.get("harness")
+                    if not isinstance(harness, str) or not harness.strip():
+                        raise RuntimeError("Class exercise test is missing its judge harness.")
+                    wrapper = Path(directory) / "judge_harness.py"
+                    wrapper.write_text(_class_harness_source(program, class_requirement[0], harness), encoding="utf-8")
+                    command = [sys.executable, "-I", str(wrapper)]
+                submission = _SubmissionProcess(command, stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=directory, env=safe_environment)
                 try:
                     stdout, stderr, return_code, output_truncated, timed_out = _run_capped(submission, test["input"], timeout_seconds)

@@ -345,6 +345,64 @@ test("coach composer sends on Enter without breaking IME or multiline input", as
   assert.match(page, /!coachReady \|\| coachBusy \|\| !coachInput\.trim\(\)/);
 });
 
+test("class exercises explain that Submit checks the class API directly", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/globals.css", projectRoot), "utf8"),
+  ]);
+  assert.match(page, /submission_mode\?: "python_class"/);
+  assert.match(page, /current\.submission_mode === "python_class"/);
+  assert.match(page, /Class API exercise/);
+  assert.match(page, /Submit imports your[\s\S]*?tests its methods directly/);
+  assert.match(styles, /\.class-submission-note/);
+});
+
+test("coach discussions are restored locally for the same exercise and provider", async () => {
+  const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
+  assert.match(
+    page,
+    /import \{[\s\S]*?coachConversationScope,[\s\S]*?readCoachConversation,[\s\S]*?writeCoachConversation,[\s\S]*?\} from "\.\/coach-conversation-storage"/,
+  );
+  assert.match(page, /const coachConversationScopeRef = useRef\(""\)/);
+  assert.match(
+    page,
+    /readCoachConversation\(\s*window\.localStorage,\s*selectedLanguage,\s*selected,\s*currentCoachRuntimeIdentity/,
+  );
+  assert.match(
+    page,
+    /writeCoachConversation\(\s*window\.localStorage,\s*selectedLanguage,\s*selected,\s*currentCoachRuntimeIdentity,\s*coachMessagesForStorage\(\)/,
+  );
+  assert.match(
+    page,
+    /const previousScope = coachConversationScopeRef\.current;[\s\S]*?JSON\.parse\(previousScope\)[\s\S]*?writeCoachConversation\(\s*window\.localStorage,\s*previousLanguage,\s*previousExercise,\s*previousRuntime,\s*coachMessagesForStorage\(\)/,
+  );
+  assert.match(page, /saved locally for this exercise/);
+  assert.match(
+    page,
+    /window\.addEventListener\("pagehide", flushBeforeLeaving\)[\s\S]*?flushBeforeLeaving\(\)[\s\S]*?window\.removeEventListener\("pagehide", flushBeforeLeaving\)/,
+  );
+  assert.match(
+    page,
+    /const coachMessagesForStorage = useCallback\(\(\)[\s\S]*?coachStreamingMessageRef\.current[\s\S]*?coachStreamTextRef\.current[\s\S]*?contextual: false/,
+  );
+  assert.match(
+    page,
+    /function selectExercise\([\s\S]*?flushCoachConversationToStorage\(\)[\s\S]*?cancelCoachWork\(true, true\)/,
+  );
+  const restoreStart = page.indexOf("const scope = coachConversationScope(");
+  const restoreEnd = page.indexOf("useEffect(", restoreStart + 1);
+  assert.ok(restoreStart >= 0 && restoreEnd > restoreStart);
+  assert.doesNotMatch(page.slice(restoreStart, restoreEnd), /fetch\(/);
+  const deletionStart = page.indexOf("async function deleteGeneratedProblem");
+  const deletionEnd = page.indexOf("const generatedDrillSettings", deletionStart);
+  const deletion = page.slice(deletionStart, deletionEnd);
+  assert.ok(
+    deletion.indexOf("selectExercise(problems[0]?.id") <
+      deletion.indexOf("clearCoachConversationsForExercise("),
+    "the final delete must clear any conversation flushed during replacement selection",
+  );
+});
+
 test("adaptive coach renders provider-neutral streamed replies progressively", async () => {
   const [page, styles] = await Promise.all([
     readFile(new URL("app/page.tsx", projectRoot), "utf8"),
