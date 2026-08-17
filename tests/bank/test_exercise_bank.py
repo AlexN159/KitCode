@@ -38,6 +38,36 @@ class ExerciseBankTests(unittest.TestCase):
         self.assertNotIn("hidden_tests", detail)
         self.assertEqual(get_exercise("missing"), None)
 
+    def test_array_input_copy_explains_count_values_and_target_lines(self) -> None:
+        common_hints = [
+            "In Python, `n = int(input())` reads the count from line 1; equivalent whitespace-based parsing is also valid.",
+            "Read line 2 with `nums = list(map(int, input().split()))`, or use another whitespace-based parser.",
+            "Use n to check how many values belong to the list, then print only the requested result.",
+        ]
+        minimum = EXERCISES["array-003"]
+        self.assertEqual(
+            minimum["description"],
+            "Line 1 contains the count n. Line 2 contains n space-separated integers. Print the smallest integer.",
+        )
+        self.assertEqual(minimum["hints"], common_hints)
+        self.assertEqual(minimum["examples"], [{"input": "4\n-2 9 3 1\n", "output": "-2"}])
+
+        frequency = EXERCISES["array-013"]
+        self.assertEqual(
+            frequency["description"],
+            "Line 1 contains the count n. Line 2 contains n space-separated integers. "
+            "Line 3 contains the target t. Print how many of the integers equal t.",
+        )
+        self.assertEqual(
+            frequency["hints"],
+            common_hints[:2]
+            + ["Read the target from line 3 with `target = int(input())`, or use another whitespace-based parser."],
+        )
+        self.assertEqual(
+            frequency["examples"],
+            [{"input": "5\n1 2 2 3 2\n2\n", "output": "3"}],
+        )
+
     def test_validator_reports_a_failing_public_case(self) -> None:
         result = validate_submission("number-001", "print('wrong')")
         self.assertEqual(result["status"], "failed")

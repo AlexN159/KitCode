@@ -16,6 +16,25 @@ test("the local production bundle contains the practice workspace", async () => 
   await access(new URL("frontend_dist/assets/", projectRoot));
 });
 
+test("examples show exact input lines and explain how Python consumes them", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/globals.css", projectRoot), "utf8"),
+  ]);
+  assert.match(page, /function splitExampleInputLines\(value: string\)/);
+  assert.match(page, /Input — line by line/);
+  assert.match(page, /className="example-input-lines"/);
+  assert.match(page, /Each numbered row is a separate input line/);
+  assert.match(page, /each <code>input\(\)<\/code> call\s+reads the next line/i);
+  assert.match(page, /className="example-value example-output"/);
+  assert.match(styles, /\.example-value\{[^}]*white-space:pre-wrap/);
+  assert.match(styles, /\.example-input-lines li\{[^}]*white-space:pre-wrap/);
+  assert.match(page, /Input for your program/);
+  assert.match(page, /Reset to example input/);
+  assert.match(page, /<strong>Program output<\/strong>/);
+  assert.doesNotMatch(page, /Custom stdin/);
+});
+
 test("the client wires every core local API workflow", async () => {
   const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
   for (const route of [

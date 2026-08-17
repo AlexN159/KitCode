@@ -23,6 +23,16 @@ type Example = {
   output: string;
   explanation?: string;
 };
+
+function splitExampleInputLines(value: string): string[] {
+  const normalized = value.replace(/\r\n?/g, "\n");
+  if (!normalized) return [];
+  const withoutFinalNewline = normalized.endsWith("\n")
+    ? normalized.slice(0, -1)
+    : normalized;
+  return withoutFinalNewline.split("\n");
+}
+
 type Problem = {
   id: string;
   title: string;
@@ -4008,29 +4018,73 @@ export default function Home() {
             )}
             <div className="statement">
               <p>{current.description ?? "Loading drill…"}</p>
-              {(current.examples ?? []).map((example, index) => (
-                <div key={index}>
-                  <h3>Example {index + 1}</h3>
-                  <div className="example">
-                    <p>
-                      <b>
-                        {selectedLanguage === "sql" ? "Dataset:" : "Input:"}
-                      </b>{" "}
-                      {selectedLanguage === "sql"
-                        ? example.input || "Exercise dataset"
-                        : example.input}
-                    </p>
-                    <p>
-                      <b>Output:</b> {example.output}
-                    </p>
-                    {example.explanation && (
-                      <p>
-                        <b>Explanation:</b> {example.explanation}
-                      </p>
-                    )}
+              {(current.examples ?? []).map((example, index) => {
+                const inputLines = splitExampleInputLines(example.input);
+                return (
+                  <div key={index}>
+                    <h3>Example {index + 1}</h3>
+                    <div className="example">
+                      <section className="example-field">
+                        <strong className="example-label">
+                          {selectedLanguage === "sql"
+                            ? "Dataset"
+                            : "Input — line by line"}
+                        </strong>
+                        {selectedLanguage === "sql" ? (
+                          <pre className="example-value">
+                            <code>{example.input || "Exercise dataset"}</code>
+                          </pre>
+                        ) : inputLines.length ? (
+                          <ol
+                            className="example-input-lines"
+                            aria-label={`${inputLines.length} input ${inputLines.length === 1 ? "line" : "lines"}`}
+                          >
+                            {inputLines.map((line, lineIndex) => (
+                              <li key={lineIndex}>
+                                <code>
+                                  {line || (
+                                    <span className="example-blank-line">
+                                      (blank line)
+                                    </span>
+                                  )}
+                                </code>
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <pre className="example-value example-empty-value">
+                            <code>(no input)</code>
+                          </pre>
+                        )}
+                        {selectedLanguage !== "sql" && (
+                          <p className="example-input-guidance">
+                            Each numbered row is a separate input line.
+                            {selectedLanguage === "python" && (
+                              <>
+                                {" "}In Python, each <code>input()</code> call
+                                reads the next line.
+                              </>
+                            )}
+                          </p>
+                        )}
+                      </section>
+                      <section className="example-field">
+                        <strong className="example-label">
+                          Expected output
+                        </strong>
+                        <pre className="example-value example-output">
+                          <code>{example.output || "(no output)"}</code>
+                        </pre>
+                      </section>
+                      {example.explanation && (
+                        <p className="example-explanation">
+                          <b>Explanation:</b> {example.explanation}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <h3>Constraints</h3>
               <ul>
                 {(current.constraints?.length
@@ -4278,11 +4332,27 @@ export default function Home() {
               </div>
               {tab === "Console" && (
                 <div className="console-wrap">
-                  <label>
-                    {selectedLanguage === "sql"
-                      ? "Exercise dataset · managed"
-                      : "Custom stdin"}
+                  <div className="console-input">
+                    <div className="console-heading">
+                      <label htmlFor="program-input">
+                        {selectedLanguage === "sql"
+                          ? "Exercise dataset · managed"
+                          : "Input for your program"}
+                      </label>
+                      {selectedLanguage !== "sql" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setStdin(current.examples?.[0]?.input ?? "")
+                          }
+                          disabled={!current.examples?.length}
+                        >
+                          Reset to example input
+                        </button>
+                      )}
+                    </div>
                     <textarea
+                      id="program-input"
                       value={selectedLanguage === "sql" ? "" : stdin}
                       onChange={(event) => setStdin(event.target.value)}
                       placeholder={
@@ -4293,16 +4363,30 @@ export default function Home() {
                       aria-label={
                         selectedLanguage === "sql"
                           ? "SQL exercise dataset is managed by this drill"
-                          : `Custom standard input for ${activeLanguage.label}`
+                          : `Input lines for your ${activeLanguage.label} program`
                       }
                       disabled={selectedLanguage === "sql"}
                     />
-                  </label>
-                  <pre className="console">
-                    {runResult
-                      ? `${runResult.stdout ?? ""}${runResult.stderr ? `\n${runResult.stderr}` : ""}${runResult.error ? `\n${runResult.error}` : ""}`
-                      : `Run your ${activeLanguage.label} code to see output here.`}
-                  </pre>
+                    {selectedLanguage !== "sql" && (
+                      <p className="console-input-help">
+                        Enter separate lines exactly as shown in the example.
+                        {selectedLanguage === "python" && (
+                          <>
+                            {" "}Each <code>input()</code> call reads the next
+                            line.
+                          </>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  <div className="console-output">
+                    <strong>Program output</strong>
+                    <pre className="console">
+                      {runResult
+                        ? `${runResult.stdout ?? ""}${runResult.stderr ? `\n${runResult.stderr}` : ""}${runResult.error ? `\n${runResult.error}` : ""}`
+                        : `Run your ${activeLanguage.label} code to see output here.`}
+                    </pre>
+                  </div>
                   {selectedLanguage === "sql" && (
                     <p className="sql-engine-status" role="status">
                       Writing dialect: {activeSqlDialect.shortLabel} · Judge: {sqlExecutionEngine}

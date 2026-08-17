@@ -312,26 +312,37 @@ if __name__ == "__main__":
 
 
 def _array_bank() -> list[dict]:
+    list_input = "Line 1 contains the count n. Line 2 contains n space-separated integers."
+    list_hints = [
+        "In Python, `n = int(input())` reads the count from line 1; equivalent whitespace-based parsing is also valid.",
+        "Read line 2 with `nums = list(map(int, input().split()))`, or use another whitespace-based parser.",
+        "Use n to check how many values belong to the list, then print only the requested result.",
+    ]
+    target_hints = [
+        list_hints[0],
+        list_hints[1],
+        "Read the target from line 3 with `target = int(input())`, or use another whitespace-based parser.",
+    ]
     specs = [
-        ("Array Sum", "Easy", ["arrays", "iteration"], "Print the sum of n integers.", [("5\n2 -1 3 0 4\n", "8"),("0\n\n", "0"),("3\n-5 -6 -7\n", "-18")], "    print(sum(nums))", "O(n) time, O(1) extra space"),
-        ("Array Maximum", "Easy", ["arrays"], "Print the largest of n integers.", [("4\n-2 9 3 1\n", "9"),("1\n-7\n", "-7"),("5\n0 0 0 0 0\n", "0")], "    print(max(nums))", "O(n) time, O(1) extra space"),
-        ("Array Minimum", "Easy", ["arrays"], "Print the smallest of n integers.", [("4\n-2 9 3 1\n", "-2"),("1\n8\n", "8"),("3\n0 -4 2\n", "-4")], "    print(min(nums))", "O(n) time, O(1) extra space"),
-        ("Count Positive Values", "Easy", ["arrays", "iteration"], "Count values strictly greater than zero.", [("5\n-1 0 2 9 -4\n", "2"),("3\n0 0 0\n", "0"),("4\n1 2 3 4\n", "4")], "    print(sum(x > 0 for x in nums))", "O(n) time, O(1) extra space"),
-        ("Count Even Values", "Easy", ["arrays", "iteration"], "Count integers divisible by two.", [("5\n1 2 3 4 8\n", "3"),("0\n\n", "0"),("3\n-2 -1 0\n", "2")], "    print(sum(x % 2 == 0 for x in nums))", "O(n) time, O(1) extra space"),
-        ("Reverse Numbers", "Easy", ["arrays", "two-pointers"], "Print the n integers in reverse order, separated by one space.", [("4\n1 2 3 4\n", "4 3 2 1"),("1\n8\n", "8"),("0\n\n", "")], "    print(*reversed(nums))", "O(n) time, O(n) output space"),
-        ("Adjacent Difference Sum", "Easy", ["arrays", "iteration"], "Print the sum of absolute differences between every adjacent pair.", [("4\n1 7 3 5\n", "12"),("1\n8\n", "0"),("3\n-2 -2 4\n", "6")], "    print(sum(abs(nums[i] - nums[i-1]) for i in range(1, n)))", "O(n) time, O(1) extra space"),
-        ("Running Totals", "Easy", ["arrays", "prefix-sum"], "Print cumulative sums after each number.", [("4\n3 -1 2 5\n", "3 2 4 9"),("1\n7\n", "7"),("0\n\n", "")], "    total = 0\n    answer = []\n    for x in nums:\n        total += x\n        answer.append(total)\n    print(*answer)", "O(n) time, O(n) output space"),
-        ("Second Distinct Largest", "Medium", ["arrays", "selection"], "Print the second-largest distinct value, or `NONE` if fewer than two distinct values exist.", [("5\n4 1 4 3 2\n", "3"),("3\n7 7 7\n", "NONE"),("2\n-1 -2\n", "-2")], "    values = sorted(set(nums), reverse=True)\n    print(values[1] if len(values) > 1 else 'NONE')", "O(n log n) time, O(n) space"),
-        ("First Peak Index", "Medium", ["arrays", "iteration"], "Return the first index i whose value is greater than both neighbors. Endpoints are not peaks. Print -1 when none exists.", [("5\n1 3 2 4 4\n", "1"),("3\n1 2 3\n", "-1"),("5\n0 2 1 2 0\n", "1")], "    answer = -1\n    for i in range(1, n - 1):\n        if nums[i] > nums[i-1] and nums[i] > nums[i+1]:\n            answer = i\n            break\n    print(answer)", "O(n) time, O(1) extra space"),
-        ("Move Zeros to End", "Easy", ["arrays", "two-pointers"], "Keep non-zero values in their original order, then append all zeros.", [("6\n0 1 0 3 12 0\n", "1 3 12 0 0 0"),("3\n0 0 0\n", "0 0 0"),("3\n1 2 3\n", "1 2 3")], "    answer = [x for x in nums if x != 0]\n    answer += [0] * (n - len(answer))\n    print(*answer)", "O(n) time, O(n) space"),
-        ("Sorted Unique", "Easy", ["arrays", "hashing"], "Print distinct input values in ascending order.", [("6\n3 1 3 2 1 2\n", "1 2 3"),("1\n5\n", "5"),("0\n\n", "")], "    print(*sorted(set(nums)))", "O(n log n) time, O(n) space"),
-        ("Frequency of Target", "Easy", ["arrays", "counting"], "Input gives n, then n integers, then target t. Print how many values equal t.", [("5\n1 2 2 3 2\n2\n", "3"),("0\n\n7\n", "0"),("3\n-1 0 -1\n-1\n", "2")], "    target = int(tokens[1+n])\n    print(nums.count(target))", "O(n) time, O(1) extra space"),
+        ("Array Sum", "Easy", ["arrays", "iteration"], f"{list_input} Print their sum.", [("5\n2 -1 3 0 4\n", "8"),("0\n\n", "0"),("3\n-5 -6 -7\n", "-18")], "    print(sum(nums))", "O(n) time, O(1) extra space"),
+        ("Array Maximum", "Easy", ["arrays"], f"{list_input} Print the largest integer.", [("4\n-2 9 3 1\n", "9"),("1\n-7\n", "-7"),("5\n0 0 0 0 0\n", "0")], "    print(max(nums))", "O(n) time, O(1) extra space"),
+        ("Array Minimum", "Easy", ["arrays"], f"{list_input} Print the smallest integer.", [("4\n-2 9 3 1\n", "-2"),("1\n8\n", "8"),("3\n0 -4 2\n", "-4")], "    print(min(nums))", "O(n) time, O(1) extra space"),
+        ("Count Positive Values", "Easy", ["arrays", "iteration"], f"{list_input} Print how many are strictly greater than zero.", [("5\n-1 0 2 9 -4\n", "2"),("3\n0 0 0\n", "0"),("4\n1 2 3 4\n", "4")], "    print(sum(x > 0 for x in nums))", "O(n) time, O(1) extra space"),
+        ("Count Even Values", "Easy", ["arrays", "iteration"], f"{list_input} Print how many are divisible by two.", [("5\n1 2 3 4 8\n", "3"),("0\n\n", "0"),("3\n-2 -1 0\n", "2")], "    print(sum(x % 2 == 0 for x in nums))", "O(n) time, O(1) extra space"),
+        ("Reverse Numbers", "Easy", ["arrays", "two-pointers"], f"{list_input} Print them in reverse order, separated by one space.", [("4\n1 2 3 4\n", "4 3 2 1"),("1\n8\n", "8"),("0\n\n", "")], "    print(*reversed(nums))", "O(n) time, O(n) output space"),
+        ("Adjacent Difference Sum", "Easy", ["arrays", "iteration"], f"{list_input} Print the sum of absolute differences between every adjacent pair.", [("4\n1 7 3 5\n", "12"),("1\n8\n", "0"),("3\n-2 -2 4\n", "6")], "    print(sum(abs(nums[i] - nums[i-1]) for i in range(1, n)))", "O(n) time, O(1) extra space"),
+        ("Running Totals", "Easy", ["arrays", "prefix-sum"], f"{list_input} Print the cumulative sum after each integer, separated by one space.", [("4\n3 -1 2 5\n", "3 2 4 9"),("1\n7\n", "7"),("0\n\n", "")], "    total = 0\n    answer = []\n    for x in nums:\n        total += x\n        answer.append(total)\n    print(*answer)", "O(n) time, O(n) output space"),
+        ("Second Distinct Largest", "Medium", ["arrays", "selection"], f"{list_input} Print the second-largest distinct value, or `NONE` if fewer than two distinct values exist.", [("5\n4 1 4 3 2\n", "3"),("3\n7 7 7\n", "NONE"),("2\n-1 -2\n", "-2")], "    values = sorted(set(nums), reverse=True)\n    print(values[1] if len(values) > 1 else 'NONE')", "O(n log n) time, O(n) space"),
+        ("First Peak Index", "Medium", ["arrays", "iteration"], f"{list_input} Print the first index i whose value is greater than both neighbors. Endpoints are not peaks; print -1 when none exists.", [("5\n1 3 2 4 4\n", "1"),("3\n1 2 3\n", "-1"),("5\n0 2 1 2 0\n", "1")], "    answer = -1\n    for i in range(1, n - 1):\n        if nums[i] > nums[i-1] and nums[i] > nums[i+1]:\n            answer = i\n            break\n    print(answer)", "O(n) time, O(1) extra space"),
+        ("Move Zeros to End", "Easy", ["arrays", "two-pointers"], f"{list_input} Keep non-zero values in their original order, then append all zeros.", [("6\n0 1 0 3 12 0\n", "1 3 12 0 0 0"),("3\n0 0 0\n", "0 0 0"),("3\n1 2 3\n", "1 2 3")], "    answer = [x for x in nums if x != 0]\n    answer += [0] * (n - len(answer))\n    print(*answer)", "O(n) time, O(n) space"),
+        ("Sorted Unique", "Easy", ["arrays", "hashing"], f"{list_input} Print the distinct values in ascending order.", [("6\n3 1 3 2 1 2\n", "1 2 3"),("1\n5\n", "5"),("0\n\n", "")], "    print(*sorted(set(nums)))", "O(n log n) time, O(n) space"),
+        ("Frequency of Target", "Easy", ["arrays", "counting"], f"{list_input} Line 3 contains the target t. Print how many of the integers equal t.", [("5\n1 2 2 3 2\n2\n", "3"),("0\n\n7\n", "0"),("3\n-1 0 -1\n-1\n", "2")], "    target = int(tokens[1+n])\n    print(nums.count(target))", "O(n) time, O(1) extra space"),
     ]
     out=[]
     for i, (title,diff,topics,desc,cases,body,complexity) in enumerate(specs,1):
         cons=["0 <= n <= 200,000", "Values fit in a signed 32-bit integer"]
-        out.append(_list_problem(f"array-{i:03}", title,diff,topics,desc,cons,cases,body,
-            ["Parse n before the list.", "Consider the empty-list boundary case.", "Avoid printing Python list brackets."],complexity))
+        hints = target_hints if title == "Frequency of Target" else list_hints
+        out.append(_list_problem(f"array-{i:03}", title,diff,topics,desc,cons,cases,body,hints,complexity))
     return out
 
 
