@@ -572,7 +572,7 @@ test("KitCode offers one removable, motion-aware Kit mascot", async () => {
   assert.match(page, /if \(!enabled\) \{[\s\S]*?setMascotMoment\(null\);/);
   assert.match(page, /checked=\{mascotEnabled\}/);
   assert.match(page, /setMascotPreference\(event\.target\.checked\)/);
-  assert.match(page, /\{mascotEnabled && !settingsOpen && \(\s*<div[\s\S]*?className=\{`kit-floating/);
+  assert.match(page, /\{mascotEnabled && !settingsOpen && !fundamentalsActive && \(\s*<div[\s\S]*?className=\{`kit-floating/);
   assert.match(page, /<KitMascot[\s\S]*?size="floating"[\s\S]*?motion=\{coachMascotMotion\}/);
   assert.doesNotMatch(page, /size="rail"/);
   assert.doesNotMatch(page, /size="coach"/);
@@ -1073,7 +1073,7 @@ test("adaptive coach offers a non-mutating editor hint workflow", async () => {
   assert.match(page, /expected_provider: snapshot\.expectedProvider/);
   assert.match(page, /expected_model: snapshot\.expectedModel/);
   assert.match(page, /expected_base_url: snapshot\.expectedBaseUrl/);
-  assert.match(page, /const coachReady = Boolean\(\s*aiStatus\.configured &&\s+draftReady/);
+  assert.match(page, /const coachReady = Boolean\(\s*!fundamentalsActive &&\s+aiStatus\.configured &&\s+draftReady/);
   assert.match(page, /setDraftReady\(false\);\s+draftExerciseRef\.current = ""/);
   assert.match(page, /hintDecorationRef/);
   assert.match(page, /editor-hint-inline/);
@@ -1086,11 +1086,11 @@ test("adaptive coach offers a non-mutating editor hint workflow", async () => {
   assert.match(page, /<label htmlFor="inline-hints">[\s\S]*?Show hints in the editor[\s\S]*?only in the card below your\s+code/);
   assert.match(page, /result\.structured !== true/);
   assert.match(page, /safeInlineHint\(result\.text \?\? result\.hint\)/);
-  assert.match(page, /setEditorHint\(\{ id: \+\+hintSequenceRef\.current, line, text: hint \}\)/);
+  assert.match(page, /setEditorHint\(\{ id: \+\+hintSequenceRef\.current, line, text: hint, inline \}\)/);
   assert.match(page, /onChange=\{handleEditorChange\}/);
   assert.match(page, /function cancelCoachWork\(\s*resetConversation = false,\s+discardVisibleHint = false/);
   assert.match(page, /if \(discardVisibleHint\) setEditorHint\(null\)/);
-  assert.match(page, /function handleEditorChange\(value\?: string\)[\s\S]*?cancelCoachWork\(false\)[\s\S]*?setCode\(nextCode\)/);
+  assert.match(page, /function handleEditorChange\(value\?: string\)[\s\S]*?coachActiveIntentRef\.current !== "hint"\) cancelCoachWork\(false\)[\s\S]*?setCode\(nextCode\)/);
   const editorChangeBody = page.slice(page.indexOf("function handleEditorChange"), page.indexOf("function undoEditorEdit"));
   assert.doesNotMatch(editorChangeBody, /setEditorHint\(null\)/);
   const resetBody = page.slice(page.indexOf("function resetCode"), page.indexOf("function startWorkflow"));
@@ -1110,6 +1110,20 @@ test("adaptive coach offers a non-mutating editor hint workflow", async () => {
   assert.match(styles, /forced-colors:active/);
 });
 
+test("coach keeps completed hints across edits and can retry a failed chat request", async () => {
+  const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
+  assert.match(page, /const coachDocumentRevisionRef = useRef\(0\)/);
+  assert.match(page, /documentRevision: coachDocumentRevisionRef\.current/);
+  assert.match(page, /coachDocumentRevisionRef\.current === snapshot\.documentRevision/);
+  assert.match(page, /function coachResponseIsCurrent\([\s\S]*?snapshot\.intent === "hint"[\s\S]*?coachSnapshotMatchesScope/);
+  assert.match(page, /function handleEditorChange\(value\?: string\)[\s\S]*?coachDocumentRevisionRef\.current \+= 1[\s\S]*?coachActiveIntentRef\.current !== "hint"/);
+  assert.match(page, /Hint · based on an earlier draft/);
+  assert.match(page, /if \(snapshot\.intent === "adaptive"\) setRetryCoachSnapshot\(snapshot\)/);
+  assert.match(page, /function retryCoachQuestion\(\)[\s\S]*?dispatchCoachAction\(\{ \.\.\.snapshot, retry: true \}\)/);
+  assert.match(page, /↻ Regenerate/);
+  assert.match(page, /Retry the same question with the same saved context/);
+});
+
 test("a ready hint mounts a Monaco view zone only when inline hints are enabled", async () => {
   const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
   const hintAnchor = page.indexOf("const line =\n      editorHint");
@@ -1119,8 +1133,8 @@ test("a ready hint mounts a Monaco view zone only when inline hints are enabled"
   const hintEffect = page.slice(effectStart, effectEnd);
 
   assert.match(hintEffect, /removeHintViewZone\(\)/);
-  assert.match(hintEffect, /inlineHintsEnabled && editorHint && model/);
-  assert.match(hintEffect, /if \(!inlineHintsEnabled \|\| !editorHint \|\| !model\)/);
+  assert.match(hintEffect, /inlineHintsEnabled && editorHint\?\.inline && model/);
+  assert.match(hintEffect, /if \(!inlineHintsEnabled \|\| !editorHint\?\.inline \|\| !model\)/);
   assert.match(hintEffect, /hintNode\.className = "editor-hint-inline"/);
   assert.match(hintEffect, /hintText\.textContent = editorHint\.text/);
   assert.match(hintEffect, /hintNode\.append\(hintLabel, " ", hintText\)/);
@@ -1134,6 +1148,32 @@ test("a ready hint mounts a Monaco view zone only when inline hints are enabled"
   assert.doesNotMatch(hintEffect, /onDidChangeModelContent|model\.getVersionId\(\)/);
   assert.match(page, /const \[editorMountVersion, setEditorMountVersion\] = useState\(0\)/);
   assert.match(page, /const onMount: OnMount = \(editor, monaco\) => \{[\s\S]*?hintDecorationRef\.current = \[\][\s\S]*?setEditorMountVersion\(\(version\) => version \+ 1\)/);
+});
+
+test("Python practice includes an optional 100-question fundamentals quiz", async () => {
+  const [page, quiz, bank, styles] = await Promise.all([
+    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/python-fundamentals-quiz.tsx", projectRoot), "utf8"),
+    import(new URL("app/python-fundamentals-questions.mjs", projectRoot)),
+    readFile(new URL("app/globals.css", projectRoot), "utf8"),
+  ]);
+
+  assert.equal(bank.pythonFundamentalsQuestions.length, 100);
+  assert.match(page, /type PythonPracticeSection = "coding" \| "fundamentals"/);
+  assert.match(page, /kitcode:selected-python-section/);
+  assert.match(page, /100 optional MCQs/);
+  assert.match(page, /<PythonFundamentalsQuiz/);
+  assert.match(page, /!fundamentalsActive &&\s+aiStatus\.configured/);
+  assert.match(quiz, /100 common multiple-choice interview questions/);
+  assert.match(quiz, /kitcode:python-fundamentals-progress-v1/);
+  assert.match(quiz, /coding progress and drafts stay intact/);
+  assert.match(quiz, /role="radiogroup"/);
+  assert.match(quiz, /Check answer/);
+  assert.match(quiz, /Next unanswered/);
+  assert.match(quiz, /Review misses/);
+  assert.match(styles, /\.practice-section-picker/);
+  assert.match(styles, /\.fundamentals-workspace/);
+  assert.match(styles, /\.fundamentals-option\.correct/);
 });
 
 test("explicit editor-write requests are isolated, undoable, and visibly marked", async () => {

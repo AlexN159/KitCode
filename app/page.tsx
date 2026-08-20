@@ -13,6 +13,7 @@ import {
   writeCoachConversation,
 } from "./coach-conversation-storage";
 import { readCoachStream } from "./coach-stream";
+import { PythonFundamentalsQuiz } from "./python-fundamentals-quiz";
 import {
   clearPersistedDraft,
   readPersistedDraft,
@@ -59,6 +60,7 @@ type Problem = {
 };
 type PracticeLanguage = "python" | "sql" | "java";
 type PracticeLevel = Problem["difficulty"];
+type PythonPracticeSection = "coding" | "fundamentals";
 type SqlDialect = "sqlite" | "postgresql" | "mysql" | "mssql";
 type JudgeResult = {
   passed?: boolean;
@@ -329,7 +331,7 @@ type CoachMessage = {
   text: string;
   contextual?: boolean;
 };
-type EditorHint = { id: number; line: number; text: string };
+type EditorHint = { id: number; line: number; text: string; inline: boolean };
 type EditorEdit = {
   id: number;
   startLine: number;
@@ -342,6 +344,7 @@ type EditorEdit = {
 };
 type CoachRequestSnapshot = {
   intent: CoachIntent;
+  retry?: boolean;
   question: string;
   exerciseId: string;
   providerIdentity: string;
@@ -351,6 +354,7 @@ type CoachRequestSnapshot = {
   expectedBaseUrl: string | null;
   code: string;
   modelVersion: number;
+  documentRevision: number;
   cursorLine: number;
   cursorColumn: number;
   history: Array<{ role: "user" | "assistant"; content: string }>;
@@ -1055,6 +1059,17 @@ function readMascotPreference() {
     return true;
   }
 }
+function readPythonPracticeSection(): PythonPracticeSection {
+  if (typeof window === "undefined") return "coding";
+  try {
+    return window.localStorage.getItem("kitcode:selected-python-section") ===
+      "fundamentals"
+      ? "fundamentals"
+      : "coding";
+  } catch {
+    return "coding";
+  }
+}
 type MascotPosition = { x: number; y: number };
 const defaultMascotPosition: MascotPosition = { x: 75, y: 50 };
 const mascotDragThreshold = 8;
@@ -1090,6 +1105,8 @@ export default function Home() {
   const [selectedLanguage, setSelectedLanguage] = useState<PracticeLanguage>(
     readLanguagePreference,
   );
+  const [pythonPracticeSection, setPythonPracticeSection] =
+    useState<PythonPracticeSection>(readPythonPracticeSection);
   const [sqlDialect, setSqlDialect] = useState<SqlDialect>(
     readSqlDialectPreference,
   );
@@ -1147,6 +1164,8 @@ export default function Home() {
   const [coachBusy, setCoachBusy] = useState(false);
   const [aiStatus, setAiStatus] = useState<AiStatus>({});
   const [coachInput, setCoachInput] = useState("");
+  const [retryCoachSnapshot, setRetryCoachSnapshot] =
+    useState<CoachRequestSnapshot | null>(null);
   const [editorHint, setEditorHint] = useState<EditorHint | null>(null);
   const [inlineHintsEnabled, setInlineHintsEnabled] = useState(
     readInlineHintPreference,
@@ -1196,6 +1215,11 @@ export default function Home() {
   const coachSubmitRef = useRef(false);
   const coachBusyRef = useRef(false);
   const coachGenerationRef = useRef(0);
+  // Monaco can deliver an onChange callback before React has committed the
+  // matching `code` state. Keep an independent, synchronous revision so an
+  // inline edit can never allow a response for the previous document through.
+  const coachDocumentRevisionRef = useRef(0);
+  const coachActiveIntentRef = useRef<CoachIntent | null>(null);
   const coachAbortRef = useRef<AbortController | null>(null);
   const coachPanelRef = useRef<HTMLElement | null>(null);
   const coachMessagesRef = useRef<HTMLDivElement | null>(null);
@@ -1456,6 +1480,7 @@ export default function Home() {
     coachAbortRef.current?.abort();
     coachAbortRef.current = null;
     coachBusyRef.current = false;
+    coachActiveIntentRef.current = null;
     coachSubmitRef.current = false;
     pendingCoachSnapshotRef.current = null;
     setCoachBusy(false);
@@ -1463,6 +1488,7 @@ export default function Home() {
     setPendingCoachQuestion("");
     setPendingCoachProvider("");
     setPendingCoachIntent("adaptive");
+    setRetryCoachSnapshot(null);
     setEditorHint(null);
     setEditorEdit(null);
     setPendingEditorEdit(null);
@@ -1658,6 +1684,7 @@ export default function Home() {
     coachAbortRef.current?.abort();
     coachAbortRef.current = null;
     coachBusyRef.current = false;
+    coachActiveIntentRef.current = null;
     coachSubmitRef.current = false;
     pendingCoachSnapshotRef.current = null;
     workflowGenerationRef.current += 1;
@@ -1943,7 +1970,7 @@ export default function Home() {
         : 1;
     hintDecorationRef.current = editor.deltaDecorations(
       hintDecorationRef.current,
-      inlineHintsEnabled && editorHint && model
+      inlineHintsEnabled && editorHint?.inline && model
         ? [
             {
               range: new monaco.Range(line, 1, line, 1),
@@ -1956,7 +1983,7 @@ export default function Home() {
         : [],
     );
 
-    if (!inlineHintsEnabled || !editorHint || !model) {
+    if (!inlineHintsEnabled || !editorHint?.inline || !model) {
       editor.render(true);
       return;
     }
@@ -2130,8 +2157,12 @@ export default function Home() {
     ]
       .filter(Boolean)
       .join(" and ") || "none";
+  const fundamentalsActive =
+    selectedLanguage === "python" &&
+    pythonPracticeSection === "fundamentals";
   const coachReady = Boolean(
-    aiStatus.configured &&
+    !fundamentalsActive &&
+      aiStatus.configured &&
       draftReady &&
       selected &&
       draftExerciseId === selected,
@@ -2242,6 +2273,7 @@ export default function Home() {
     coachAbortRef.current?.abort();
     coachAbortRef.current = null;
     coachStreamingMessageRef.current = null;
+    coachActiveIntentRef.current = null;
     if (coachStreamFrameRef.current !== null) {
       window.cancelAnimationFrame(coachStreamFrameRef.current);
       coachStreamFrameRef.current = null;
@@ -2249,6 +2281,7 @@ export default function Home() {
     coachBusyRef.current = false;
     coachSubmitRef.current = false;
     pendingCoachSnapshotRef.current = null;
+    setRetryCoachSnapshot(null);
     setCoachBusy(false);
     setCoachConsentOpen(false);
     setPendingCoachQuestion("");
@@ -2270,8 +2303,9 @@ export default function Home() {
     const nextCode = value ?? "";
     const isAiEdit = applyingEditorEditRef.current;
     applyingEditorEditRef.current = false;
-    if (!isAiEdit && nextCode !== code) {
-      cancelCoachWork(false);
+    if (!isAiEdit) {
+      coachDocumentRevisionRef.current += 1;
+      if (coachActiveIntentRef.current !== "hint") cancelCoachWork(false);
       setPendingEditorEdit(null);
       setEditorEdit(null);
     }
@@ -2331,6 +2365,37 @@ export default function Home() {
     );
     editor.revealLinesInCenterIfOutsideViewport(edit.startLine, edit.endLine);
     editor.focus();
+  }
+  function choosePythonPracticeSection(section: PythonPracticeSection) {
+    if (section === pythonPracticeSection) {
+      setProblemDrawerOpen(false);
+      return;
+    }
+    flushCoachConversationToStorage();
+    cancelCoachWork(false, true);
+    clearEditorEdit();
+    workflowGenerationRef.current += 1;
+    workflowBusyRef.current = false;
+    setWorkflowBusy(false);
+    setCelebration(null);
+    setRunResult(null);
+    setTraceSteps([]);
+    setTraceIndex(0);
+    setStatus(
+      section === "fundamentals"
+        ? "Python Fundamentals · choose an answer"
+        : "Ready to run",
+    );
+    setPythonPracticeSection(section);
+    setProblemDrawerOpen(false);
+    try {
+      window.localStorage.setItem(
+        "kitcode:selected-python-section",
+        section,
+      );
+    } catch {
+      /* The section remains selected for this session. */
+    }
   }
   function selectExercise(exerciseId: string) {
     if (exerciseId === selected) {
@@ -2409,7 +2474,8 @@ export default function Home() {
     }
   }
   function resetCode() {
-    cancelCoachWork(false);
+    if (coachActiveIntentRef.current !== "hint") cancelCoachWork(false);
+    coachDocumentRevisionRef.current += 1;
     clearEditorEdit();
     const fresh = current.starter_code ?? blankCodeFor(selectedLanguage);
     try {
@@ -2747,6 +2813,7 @@ export default function Home() {
           : null,
       code: model?.getValue() ?? code,
       modelVersion: model?.getVersionId() ?? 0,
+      documentRevision: coachDocumentRevisionRef.current,
       cursorLine: position?.lineNumber ?? 1,
       cursorColumn: position?.column ?? 1,
       history,
@@ -2991,20 +3058,37 @@ export default function Home() {
     window.addEventListener("keydown", onShortcut, true);
     return () => window.removeEventListener("keydown", onShortcut, true);
   });
+  function coachSnapshotMatchesScope(
+    snapshot: CoachRequestSnapshot,
+    generation?: number,
+  ) {
+    return (
+      (generation === undefined || generation === coachGenerationRef.current) &&
+      selectedRef.current === snapshot.exerciseId &&
+      selectedLanguage === snapshot.language &&
+      (snapshot.language !== "sql" || snapshot.sqlDialect === sqlDialect) &&
+      coachRuntimeIdentity(aiStatusRef.current) === snapshot.runtimeIdentity
+    );
+  }
   function coachSnapshotIsCurrent(
     snapshot: CoachRequestSnapshot,
     generation?: number,
   ) {
     const model = editorRef.current?.getModel();
     return (
-      (generation === undefined || generation === coachGenerationRef.current) &&
-      selectedRef.current === snapshot.exerciseId &&
-      selectedLanguage === snapshot.language &&
-      (snapshot.language !== "sql" || snapshot.sqlDialect === sqlDialect) &&
-      coachRuntimeIdentity(aiStatusRef.current) === snapshot.runtimeIdentity &&
+      coachSnapshotMatchesScope(snapshot, generation) &&
+      coachDocumentRevisionRef.current === snapshot.documentRevision &&
       (model?.getVersionId() ?? 0) === snapshot.modelVersion &&
       (model?.getValue() ?? snapshot.code) === snapshot.code
     );
+  }
+  function coachResponseIsCurrent(
+    snapshot: CoachRequestSnapshot,
+    generation?: number,
+  ) {
+    return snapshot.intent === "hint"
+      ? coachSnapshotMatchesScope(snapshot, generation)
+      : coachSnapshotIsCurrent(snapshot, generation);
   }
   function dispatchCoachAction(snapshot: CoachRequestSnapshot) {
     if (!hasCoachConsent(snapshot.providerIdentity)) {
@@ -3020,13 +3104,15 @@ export default function Home() {
     void executeCoachAction(snapshot);
   }
   async function executeCoachAction(snapshot: CoachRequestSnapshot) {
-    if (coachBusyRef.current || !coachSnapshotIsCurrent(snapshot)) {
+    if (coachBusyRef.current || !coachResponseIsCurrent(snapshot)) {
       coachSubmitRef.current = false;
       return;
     }
     resetMascotIdleRef.current();
     coachBusyRef.current = true;
+    coachActiveIntentRef.current = snapshot.intent;
     coachSubmitRef.current = true;
+    if (snapshot.intent === "adaptive") setRetryCoachSnapshot(null);
     setCoachBusy(true);
     const generation = coachGenerationRef.current + 1;
     coachGenerationRef.current = generation;
@@ -3034,7 +3120,10 @@ export default function Home() {
     coachAbortRef.current?.abort();
     coachAbortRef.current = controller;
     let streamedMessageId: string | null = null;
-    if (snapshot.intent === "adaptive" || snapshot.intent === "edit") {
+    if (
+      (snapshot.intent === "adaptive" || snapshot.intent === "edit") &&
+      !snapshot.retry
+    ) {
       const id = `message-${++messageSequenceRef.current}`;
       appendCoachMessage({
         id,
@@ -3131,7 +3220,7 @@ export default function Home() {
         if (!response.ok)
           throw new Error(typeof result.detail === "string" ? result.detail : "The coach is unavailable right now.");
       }
-      if (!coachSnapshotIsCurrent(snapshot, generation)) return;
+      if (!coachResponseIsCurrent(snapshot, generation)) return;
       if (
         typeof result.provider === "string" &&
         result.provider !== snapshot.expectedProvider
@@ -3199,21 +3288,28 @@ export default function Home() {
       const line = Number.isInteger(result.line)
         ? Number(result.line)
         : snapshot.cursorLine;
-      const model = editorRef.current?.getModel();
-      if (!hint || !model || line < 1 || line > model.getLineCount()) {
+      if (!hint) {
         setHintNotice(
-          "The coach could not place a safe hint in this version of your script.",
+          "The coach could not provide a safe hint. Try again.",
         );
         return;
       }
-      setEditorHint({ id: ++hintSequenceRef.current, line, text: hint });
-      setHintNotice("");
-      editorRef.current?.revealLineInCenterIfOutsideViewport(line);
+      const model = editorRef.current?.getModel();
+      const basedOnPriorDraft =
+        coachDocumentRevisionRef.current !== snapshot.documentRevision;
+      const inline = Boolean(
+        !basedOnPriorDraft && model && line >= 1 && line <= model.getLineCount(),
+      );
+      setEditorHint({ id: ++hintSequenceRef.current, line, text: hint, inline });
+      setHintNotice(
+        basedOnPriorDraft ? "Hint shown below · based on your earlier draft." : "",
+      );
+      if (inline) editorRef.current?.revealLineInCenterIfOutsideViewport(line);
       showMascotComplete();
     } catch (error) {
       if (
         controller.signal.aborted ||
-        !coachSnapshotIsCurrent(snapshot, generation)
+        !coachResponseIsCurrent(snapshot, generation)
       )
         return;
       const detail =
@@ -3234,6 +3330,7 @@ export default function Home() {
         }
         if (snapshot.intent === "edit")
           setStatus("AI editor request failed · your code was not changed");
+        if (snapshot.intent === "adaptive") setRetryCoachSnapshot(snapshot);
       } else
         setHintNotice(
           "The hint service is unavailable. Your code was not changed.",
@@ -3242,6 +3339,7 @@ export default function Home() {
       if (generation === coachGenerationRef.current) {
         if (coachAbortRef.current === controller) coachAbortRef.current = null;
         coachBusyRef.current = false;
+        coachActiveIntentRef.current = null;
         coachSubmitRef.current = false;
         setCoachBusy(false);
       }
@@ -3584,6 +3682,20 @@ export default function Home() {
     );
     dispatchCoachAction(snapshot);
   }
+  function retryCoachQuestion() {
+    const snapshot = retryCoachSnapshot;
+    if (
+      !snapshot ||
+      coachBusyRef.current ||
+      !coachReady ||
+      !coachSnapshotIsCurrent(snapshot)
+    ) {
+      setRetryCoachSnapshot(null);
+      return;
+    }
+    coachSubmitRef.current = true;
+    dispatchCoachAction({ ...snapshot, retry: true });
+  }
   function askCoach(event: FormEvent) {
     event.preventDefault();
     submitCoachQuestion();
@@ -3720,14 +3832,14 @@ export default function Home() {
         ? "hunting"
         : mascotMoment?.motion ?? (mascotSleeping ? "sleeping" : "idle");
   return (
-    <main className="shell">
+    <main className={`shell${fundamentalsActive ? " fundamentals-mode" : ""}`}>
       {celebration && (
         <SuccessCelebration
           key={celebration.id}
           variant={celebration.variant}
         />
       )}
-      {mascotEnabled && !settingsOpen && (
+      {mascotEnabled && !settingsOpen && !fundamentalsActive && (
         <div
           className={`kit-floating${mascotDragging ? " is-dragging" : ""}`}
           style={{
@@ -3895,7 +4007,7 @@ export default function Home() {
           <Icon label="Practice problems">⌘</Icon>
         </button>
         <button
-          className="rail-button"
+          className="rail-button coach-rail-button"
           onClick={() => setCoachDrawerOpen(true)}
           aria-label="Open AI coach"
           aria-expanded={coachDrawerOpen}
@@ -3946,6 +4058,58 @@ export default function Home() {
             ×
           </button>
         </div>
+        {selectedLanguage === "python" && (
+          <div
+            className="practice-section-picker"
+            role="group"
+            aria-label="Python practice section"
+          >
+            <button
+              type="button"
+              className={!fundamentalsActive ? "active" : ""}
+              aria-pressed={!fundamentalsActive}
+              onClick={() => choosePythonPracticeSection("coding")}
+            >
+              Coding drills
+              <small>Write and run Python</small>
+            </button>
+            <button
+              type="button"
+              className={fundamentalsActive ? "active" : ""}
+              aria-pressed={fundamentalsActive}
+              onClick={() => choosePythonPracticeSection("fundamentals")}
+            >
+              Fundamentals
+              <small>100 optional MCQs</small>
+            </button>
+          </div>
+        )}
+        {fundamentalsActive ? (
+          <div className="fundamentals-bank-summary">
+            <div>
+              <p className="eyebrow">PYTHON INTERVIEW PREP</p>
+              <h2>Fundamentals question bank</h2>
+            </div>
+            <div className="fundamentals-bank-stat">
+              <b>100</b>
+              <span>
+                Common interview questions covering Python syntax, types,
+                runtime behavior, OOP, testing, and concurrency.
+              </span>
+            </div>
+            <p>
+              <strong>Optional and separate:</strong> quiz answers are saved
+              locally and never change your coding-drill completion.
+            </p>
+            <button
+              type="button"
+              onClick={() => choosePythonPracticeSection("coding")}
+            >
+              Return to coding drills
+            </button>
+          </div>
+        ) : (
+          <>
         <section className="level-picker" aria-labelledby="level-picker-title">
           <div className="level-picker-heading">
             <strong id="level-picker-title">Choose a practice level</strong>
@@ -4079,8 +4243,17 @@ export default function Home() {
             {catalogTotal ? ` · ${catalogTotal} overall` : ""}
           </span>
         </div>
+          </>
+        )}
       </aside>
       <section className="workspace">
+        {fundamentalsActive ? (
+          <PythonFundamentalsQuiz
+            clock={clock}
+            onReturnToCoding={() => choosePythonPracticeSection("coding")}
+          />
+        ) : (
+          <>
         <header className="topbar">
           <div className="crumbs">
             <span>Practice</span>
@@ -4328,7 +4501,11 @@ export default function Home() {
                   aria-atomic="true"
                 >
                   <span>
-                    <strong>Hint · line {editorHint.line}</strong>
+                    <strong>
+                      {editorHint.inline
+                        ? `Hint · line ${editorHint.line}`
+                        : "Hint · based on an earlier draft"}
+                    </strong>
                     {editorHint.text}
                   </span>
                   <button
@@ -4671,6 +4848,8 @@ export default function Home() {
             </div>
           </section>
         </div>
+          </>
+        )}
       </section>
       <aside
         ref={coachPanelRef}
@@ -4720,6 +4899,20 @@ export default function Home() {
           <span role="status" aria-live="polite" aria-atomic="true">
             {hintNotice || "Adaptive coaching—ask naturally."}
           </span>
+          {retryCoachSnapshot && (
+            <button
+              type="button"
+              onClick={retryCoachQuestion}
+              disabled={
+                coachBusy ||
+                !coachReady
+              }
+              aria-label="Regenerate the last failed coach response"
+              title="Retry the same question with the same saved context"
+            >
+              ↻ Regenerate
+            </button>
+          )}
         </div>
         <div className="coach-context">
           <span>⌁</span>
