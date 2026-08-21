@@ -1087,7 +1087,7 @@ test("adaptive coach offers a non-mutating editor hint workflow", async () => {
   assert.match(page, /result\.structured !== true/);
   assert.match(page, /safeInlineHint\(result\.text \?\? result\.hint\)/);
   assert.match(page, /setEditorHint\(\{ id: \+\+hintSequenceRef\.current, line, text: hint, inline \}\)/);
-  assert.match(page, /onChange=\{handleEditorChange\}/);
+  assert.match(page, /onChange=\{bestSolutionActive \? undefined : handleEditorChange\}/);
   assert.match(page, /function cancelCoachWork\(\s*resetConversation = false,\s+discardVisibleHint = false/);
   assert.match(page, /if \(discardVisibleHint\) setEditorHint\(null\)/);
   assert.match(page, /function handleEditorChange\(value\?: string\)[\s\S]*?coachActiveIntentRef\.current !== "hint"\) cancelCoachWork\(false\)[\s\S]*?setCode\(nextCode\)/);
@@ -1097,7 +1097,7 @@ test("adaptive coach offers a non-mutating editor hint workflow", async () => {
   assert.doesNotMatch(resetBody, /setEditorHint\(null\)/);
   assert.match(page, /function selectExercise\(exerciseId: string\)[\s\S]*?cancelCoachWork\(true, true\)/);
   assert.doesNotMatch(page, /function requestHint\(\).*clearEditorHint\(\)/);
-  assert.match(page, /\{editorHint && \(\s*<div[\s\S]*?className="editor-hint-card"/);
+  assert.match(page, /\{!bestSolutionActive && editorHint && \(\s*<div[\s\S]*?className="editor-hint-card"/);
   assert.match(page, /className="editor-hint-card"\s+role="status"/);
   assert.match(page, /clearEditorHint\(\);\s+editorRef\.current\?\.focus\(\)/);
   assert.match(page, />\s*Dismiss\s*<\/button>/);
@@ -1220,13 +1220,14 @@ test("Python practice includes an optional 100-question fundamentals quiz", asyn
   assert.match(styles, /\.fundamentals-option\.correct/);
 });
 
-test("an accepted current submission can reveal a reviewed best answer safely", async () => {
+test("an accepted submission opens a reviewed answer in a separate read-only editor tab", async () => {
   const [page, styles] = await Promise.all([
     readFile(new URL("app/page.tsx", projectRoot), "utf8"),
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
   ]);
 
   assert.match(page, /type AcceptedSubmissionSnapshot = \{/);
+  assert.match(page, /type EditorDocument = "learner" \| "reference"/);
   assert.match(
     page,
     /if \(accepted\) \{[\s\S]*?setAcceptedSubmission\(\{[\s\S]*?exerciseId: workflow\.exerciseId,[\s\S]*?language: workflow\.language,[\s\S]*?sqlDialect: workflow\.dialect \?\? "sqlite",[\s\S]*?code,/,
@@ -1264,9 +1265,30 @@ test("an accepted current submission can reveal a reviewed best answer safely", 
   );
   assert.match(page, /aria-labelledby="reference-answer-title"/);
   assert.match(page, /aria-busy=\{referenceSolutionLoading\}/);
-  assert.match(page, /aria-controls="reference-answer-details"/);
-  assert.match(page, /View best answer/);
-  assert.match(page, /Hide best answer/);
+  assert.match(
+    page,
+    /Submit <kbd>F6<\/kbd>[\s\S]*?referenceAnswerUnlocked[\s\S]*?className="best-answer-button"[\s\S]*?★ Best answer/,
+  );
+  assert.match(page, /function openBestSolution\(\)[\s\S]*?setEditorDocument\("reference"\)/);
+  assert.match(
+    page,
+    /function showLearnerSolution\(\)[\s\S]*?learnerCodeBeforeReferenceRef\.current[\s\S]*?setCode\(preservedCode\)[\s\S]*?setEditorDocument\("learner"\)/,
+  );
+  assert.match(
+    page,
+    /function preserveLearnerSolution\(\)[\s\S]*?editorRef\.current\?\.getValue\(\) \?\? code/,
+  );
+  assert.match(page, /className="editor-file-tabs"[\s\S]*?role="tablist"/);
+  assert.match(page, /id="learner-solution-tab"[\s\S]*?aria-selected=\{!bestSolutionActive\}/);
+  assert.match(page, /id="best-solution-tab"[\s\S]*?aria-selected=\{bestSolutionActive\}/);
+  assert.match(page, /\{bestSolutionFile\}[\s\S]*?<small>Read only<\/small>/);
+  assert.match(
+    page,
+    /value=\{[\s\S]*?bestSolutionActive \? \(referenceSolution\?\.solution \?\? ""\) : code[\s\S]*?onChange=\{bestSolutionActive \? undefined : handleEditorChange\}/,
+  );
+  assert.match(page, /readOnly: bestSolutionActive/);
+  assert.match(page, /domReadOnly: bestSolutionActive/);
+  assert.doesNotMatch(page, /Your answer is safe in/);
   assert.match(page, /Best means target Big-O time and space first/);
   assert.match(page, /Time · space · clear lines/);
   assert.match(page, /referenceSolution\.expectedComplexity/);
@@ -1274,8 +1296,13 @@ test("an accepted current submission can reveal a reviewed best answer safely", 
   assert.match(page, /referenceSolution\.referenceDialect/);
   assert.match(page, /referenceSolution\.complexityNote/);
   assert.match(page, /provisional AI-created drill/);
-  assert.match(page, /<code>\{referenceSolution\.solution\}<\/code>/);
+  assert.match(page, /Open best answer tab/);
+  assert.doesNotMatch(page, /<code>\{referenceSolution\.solution\}<\/code>/);
   assert.match(styles, /\.reference-answer/);
+  assert.match(styles, /\.editor-file-tabs/);
+  assert.match(styles, /\.best-solution-tab/);
+  assert.match(styles, /\.best-answer-button/);
+  assert.match(styles, /\.best-solution-banner/);
 });
 
 test("explicit editor-write requests are isolated, undoable, and visibly marked", async () => {

@@ -62,6 +62,7 @@ type PracticeLanguage = "python" | "sql" | "java";
 type PracticeLevel = Problem["difficulty"];
 type PythonPracticeSection = "coding" | "fundamentals";
 type SqlDialect = "sqlite" | "postgresql" | "mysql" | "mssql";
+type EditorDocument = "learner" | "reference";
 type JudgeResult = {
   passed?: boolean;
   name?: string;
@@ -1156,8 +1157,8 @@ export default function Home() {
     useState<AcceptedSubmissionSnapshot | null>(null);
   const [referenceSolution, setReferenceSolution] =
     useState<ReferenceSolution | null>(null);
-  const [referenceSolutionVisible, setReferenceSolutionVisible] =
-    useState(false);
+  const [editorDocument, setEditorDocument] =
+    useState<EditorDocument>("learner");
   const [referenceSolutionLoading, setReferenceSolutionLoading] =
     useState(false);
   const [referenceSolutionError, setReferenceSolutionError] = useState("");
@@ -1264,6 +1265,7 @@ export default function Home() {
   const coachRestartTimerRef = useRef<number | null>(null);
   const referenceSolutionGenerationRef = useRef(0);
   const referenceSolutionAbortRef = useRef<AbortController | null>(null);
+  const learnerCodeBeforeReferenceRef = useRef<string | null>(null);
   const consentFocusTargetRef = useRef<"editor" | "coach" | null>(null);
   const hintSequenceRef = useRef(0);
   const messageSequenceRef = useRef(0);
@@ -2232,6 +2234,11 @@ export default function Home() {
       (selectedLanguage !== "sql" ||
         acceptedSubmission.sqlDialect === sqlDialect),
   );
+  const bestSolutionActive = Boolean(
+    editorDocument === "reference" &&
+      referenceSolution?.exerciseId === selected &&
+      referenceSolution.language === selectedLanguage,
+  );
   const streamingCoachMessageId = coachBusy
     ? messages.reduce<string | null>(
         (latest, message) =>
@@ -2250,6 +2257,7 @@ export default function Home() {
           ? Boolean(aiStatus.anthropic_configured)
           : true;
   const activeLanguage = languageMeta(selectedLanguage);
+  const bestSolutionFile = `best-${activeLanguage.file}`;
   const activeSqlDialect = sqlDialectMeta(sqlDialect);
   const sqlExecutionEngineValue =
     runResult?.executed_engine ??
@@ -2507,7 +2515,8 @@ export default function Home() {
     referenceSolutionAbortRef.current = null;
     setAcceptedSubmission(null);
     setReferenceSolution(null);
-    setReferenceSolutionVisible(false);
+    setEditorDocument("learner");
+    learnerCodeBeforeReferenceRef.current = null;
     setReferenceSolutionLoading(false);
     setReferenceSolutionError("");
   }
@@ -2648,6 +2657,15 @@ export default function Home() {
     if (!selected || workflowBusyRef.current) return null;
     resetMascotIdleRef.current();
     if (clearAcceptedSubmission) clearReferenceSolutionState();
+    else {
+      setEditorDocument("learner");
+      if (referenceSolutionAbortRef.current) {
+        referenceSolutionGenerationRef.current += 1;
+        referenceSolutionAbortRef.current.abort();
+        referenceSolutionAbortRef.current = null;
+        setReferenceSolutionLoading(false);
+      }
+    }
     workflowBusyRef.current = true;
     const generation = workflowGenerationRef.current + 1;
     workflowGenerationRef.current = generation;
@@ -2948,6 +2966,32 @@ export default function Home() {
       }
     }
   }
+  function showLearnerSolution() {
+    const preservedCode = learnerCodeBeforeReferenceRef.current;
+    if (preservedCode !== null && preservedCode !== code)
+      setCode(preservedCode);
+    setEditorDocument("learner");
+    setStatus("Your answer is active · the reviewed answer stays read-only");
+  }
+  function preserveLearnerSolution() {
+    learnerCodeBeforeReferenceRef.current =
+      editorRef.current?.getValue() ?? code;
+  }
+  function openBestSolution() {
+    if (
+      !referenceAnswerUnlocked ||
+      current.source === "ai_generated" ||
+      referenceSolutionLoading
+    )
+      return;
+    if (referenceSolution?.exerciseId === selected) {
+      preserveLearnerSolution();
+      setEditorDocument("reference");
+      setStatus("Best answer opened · your solution is unchanged");
+      return;
+    }
+    void revealReferenceSolution();
+  }
   async function revealReferenceSolution() {
     const snapshot = acceptedSubmission;
     if (
@@ -3029,7 +3073,9 @@ export default function Home() {
             ? payload.complexity_note
             : undefined,
       });
-      setReferenceSolutionVisible(true);
+      preserveLearnerSolution();
+      setEditorDocument("reference");
+      setStatus("Best answer opened · your solution is unchanged");
     } catch (error) {
       if (
         controller.signal.aborted ||
@@ -3041,6 +3087,7 @@ export default function Home() {
           ? error.message
           : "The reference answer is unavailable right now.",
       );
+      setStatus("Best answer unavailable · try again");
     } finally {
       if (generation === referenceSolutionGenerationRef.current) {
         if (referenceSolutionAbortRef.current === controller)
@@ -4757,13 +4804,42 @@ export default function Home() {
           </article>
           <section className="editor-area">
             <div className="editor-toolbar">
-              <div className="file-tab">
-                <span className={`language-dot ${selectedLanguage}`}>●</span>
-                {activeLanguage.file}
-                {selectedLanguage === "sql" && (
-                  <span className="sql-editor-dialect">
-                    {activeSqlDialect.shortLabel} mode
-                  </span>
+              <div
+                className="editor-file-tabs"
+                role="tablist"
+                aria-label="Open editor documents"
+              >
+                <button
+                  type="button"
+                  id="learner-solution-tab"
+                  role="tab"
+                  aria-selected={!bestSolutionActive}
+                  aria-controls="solution-editor-panel"
+                  className={`file-tab ${!bestSolutionActive ? "active" : ""}`}
+                  onClick={showLearnerSolution}
+                >
+                  <span className={`language-dot ${selectedLanguage}`}>●</span>
+                  {activeLanguage.file}
+                  {selectedLanguage === "sql" && (
+                    <span className="sql-editor-dialect">
+                      {activeSqlDialect.shortLabel} mode
+                    </span>
+                  )}
+                </button>
+                {referenceSolution?.exerciseId === selected && (
+                  <button
+                    type="button"
+                    id="best-solution-tab"
+                    role="tab"
+                    aria-selected={bestSolutionActive}
+                    aria-controls="solution-editor-panel"
+                    className={`file-tab best-solution-tab ${bestSolutionActive ? "active" : ""}`}
+                    onClick={openBestSolution}
+                  >
+                    <span aria-hidden="true">★</span>
+                    {bestSolutionFile}
+                    <small>Read only</small>
+                  </button>
                 )}
               </div>
               <div className="editor-actions">
@@ -4775,6 +4851,7 @@ export default function Home() {
                       onChange={(event) =>
                         selectSqlDialect(event.target.value as SqlDialect)
                       }
+                      disabled={bestSolutionActive}
                       aria-label="SQL dialect"
                     >
                       {sqlDialects.map((dialect) => (
@@ -4785,22 +4862,59 @@ export default function Home() {
                     </select>
                   </label>
                 )}
-                <button onClick={resetCode} className="text-button">
+                <button
+                  onClick={resetCode}
+                  className="text-button"
+                  disabled={bestSolutionActive}
+                  title={
+                    bestSolutionActive
+                      ? "Switch to your solution before resetting it"
+                      : "Restore the starter code"
+                  }
+                >
                   Reset
                 </button>
               </div>
             </div>
-            <div className="editor-shell monaco-shell">
+            {bestSolutionActive && referenceSolution && (
+              <div className="best-solution-banner" role="status">
+                <strong>Reviewed best answer</strong>
+                <span>{referenceSolution.expectedComplexity}</span>
+                {referenceSolution.lineCount > 0 && (
+                  <span>{referenceSolution.lineCount} non-blank lines</span>
+                )}
+              </div>
+            )}
+            <div
+              className={`editor-shell monaco-shell ${bestSolutionActive ? "showing-best-solution" : ""}`}
+              id="solution-editor-panel"
+              role="tabpanel"
+              aria-labelledby={
+                bestSolutionActive
+                  ? "best-solution-tab"
+                  : "learner-solution-tab"
+              }
+            >
               <Editor
+                key={`${bestSolutionActive ? "reference" : "learner"}-${selected}-${selectedLanguage}`}
+                path={`inmemory://kitcode/${encodeURIComponent(selected)}/${bestSolutionActive ? bestSolutionFile : activeLanguage.file}`}
                 height="100%"
                 language={activeLanguage.monaco}
                 theme="kitcode-night"
-                value={code}
-                onChange={handleEditorChange}
-                onMount={onMount}
+                value={
+                  bestSolutionActive ? (referenceSolution?.solution ?? "") : code
+                }
+                onChange={bestSolutionActive ? undefined : handleEditorChange}
+                onMount={
+                  bestSolutionActive
+                    ? () => {
+                        editorRef.current = null;
+                      }
+                    : onMount
+                }
                 loading={
                   <div className="editor-loading" role="status">
-                    Loading accessible {activeLanguage.label} editor…
+                    Loading {bestSolutionActive ? "reviewed answer" : `accessible ${activeLanguage.label} editor`}…
                   </div>
                 }
                 options={{
@@ -4818,9 +4932,15 @@ export default function Home() {
                   glyphMargin: true,
                   padding: { top: 14 },
                   accessibilitySupport: "on",
+                  readOnly: bestSolutionActive,
+                  domReadOnly: bestSolutionActive,
+                  readOnlyMessage: {
+                    value:
+                      "The reviewed best answer is read-only. Switch to your solution tab to keep coding.",
+                  },
                 }}
               />
-              {editorHint && (
+              {!bestSolutionActive && editorHint && (
                 <div
                   key={editorHint.id}
                   className="editor-hint-card"
@@ -4848,7 +4968,7 @@ export default function Home() {
                 </div>
               )}
             </div>
-            {pendingEditorEdit && (
+            {!bestSolutionActive && pendingEditorEdit && (
               <div
                 className="editor-edit-card pending"
                 role="region"
@@ -4890,7 +5010,7 @@ export default function Home() {
                 </button>
               </div>
             )}
-            {editorEdit && (
+            {!bestSolutionActive && editorEdit && (
               <div
                 className="editor-edit-card applied"
                 role="region"
@@ -4954,6 +5074,34 @@ export default function Home() {
               >
                 Submit <kbd>F6</kbd>
               </button>
+              {referenceAnswerUnlocked &&
+                current.source !== "ai_generated" && (
+                  <button
+                    type="button"
+                    onClick={
+                      bestSolutionActive
+                        ? showLearnerSolution
+                        : openBestSolution
+                    }
+                    disabled={referenceSolutionLoading}
+                    className="best-answer-button"
+                    aria-pressed={bestSolutionActive}
+                    aria-controls="solution-editor-panel"
+                    title={
+                      bestSolutionActive
+                        ? "Return to your unchanged solution"
+                        : "Open the reviewed answer in a read-only editor tab"
+                    }
+                  >
+                    {referenceSolutionLoading
+                      ? "Opening best answer…"
+                      : bestSolutionActive
+                        ? `← ${activeLanguage.file}`
+                        : referenceSolutionError
+                          ? "↻ Retry best answer"
+                          : "★ Best answer"}
+                  </button>
+                )}
               <span
                 className="run-status"
                 role="status"
@@ -5123,29 +5271,24 @@ export default function Home() {
                         {current.source !== "ai_generated" && (
                           <button
                             type="button"
-                            aria-controls="reference-answer-details"
-                            aria-expanded={
-                              Boolean(referenceSolution) &&
-                              referenceSolutionVisible
+                            aria-controls="solution-editor-panel"
+                            aria-expanded={bestSolutionActive}
+                            onClick={
+                              bestSolutionActive
+                                ? showLearnerSolution
+                                : openBestSolution
                             }
-                            onClick={() => {
-                              if (referenceSolution)
-                                setReferenceSolutionVisible((visible) =>
-                                  !visible,
-                                );
-                              else void revealReferenceSolution();
-                            }}
                             disabled={referenceSolutionLoading}
                           >
                             {referenceSolutionLoading
                               ? "Checking your accepted answer…"
                               : referenceSolution
-                                ? referenceSolutionVisible
-                                  ? "Hide best answer"
-                                  : "Show best answer"
+                                ? bestSolutionActive
+                                  ? "Return to my answer"
+                                  : "Open best answer tab"
                                 : referenceSolutionError
                                   ? "Try again"
-                                  : "View best answer"}
+                                  : "Open best answer tab"}
                           </button>
                         )}
                       </div>
@@ -5154,8 +5297,7 @@ export default function Home() {
                           This is a provisional AI-created drill, so it does
                           not have a vetted reference answer.
                         </p>
-                      ) : referenceSolution?.exerciseId === selected &&
-                        referenceSolutionVisible ? (
+                      ) : referenceSolution?.exerciseId === selected ? (
                         <div
                           className="reference-answer-details"
                           id="reference-answer-details"
@@ -5197,9 +5339,11 @@ export default function Home() {
                               </span>
                             )}
                           </div>
-                          <pre aria-label="Best reference solution">
-                            <code>{referenceSolution.solution}</code>
-                          </pre>
+                          <p className="reference-answer-editor-note">
+                            The complete answer is available in the read-only
+                            {` ${bestSolutionFile}`} editor tab. Your code stays
+                            unchanged in {activeLanguage.file}.
+                          </p>
                           <p>{referenceSolution.selectionBasis}</p>
                           <p>{referenceSolution.readabilityNote}</p>
                           {referenceSolution.complexityNote && (
