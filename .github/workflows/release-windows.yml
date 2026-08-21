@@ -49,10 +49,10 @@ jobs:
         shell: pwsh
         run: pnpm test
 
-      # Keep this deliberately focused: it verifies the release catalogue,
-      # every class-contract pathway, and independent Hard-exercise oracles
-      # without rerunning the slower exhaustive per-fixture suites on a tag.
-      - name: Verify the Python curriculum
+      # The downloadable build must never advertise a reviewed answer that no
+      # longer passes its judge. This gate covers all 700 references plus the
+      # class/privacy/oracle checks that protect the learner-facing catalogue.
+      - name: Verify the curriculum and reviewed answers
         shell: pwsh
         run: |
           python -m pytest -q --maxfail=1 `
@@ -62,7 +62,12 @@ jobs:
             tests/bank/test_python_curated_354_393_audit.py `
             tests/bank/test_python_curated_201_288.py `
             tests/bank/test_python_curated_289_353.py `
-            -k "catalogue_item_does_not_expose_class or release_catalogue or catalogue_has_breadth or every_exercise_has_a_private_test_floor or class_runner or class_harnesses or cross_level or real_class or promised_language or procedural_and_dummy or contiguous_hard or seeded or geometry_dp or line_tiling or final_tree or remaining_final or isomorphism or convex_ray or manifest_is_exactly or complete_runner_schema or data_only or representative_contracts or ids_schema or literal_fixtures or final_eight"
+            tests/bank/test_python_reference_formatting.py `
+            tests/bank/test_reference_solution_formatting.py `
+            tests/bank/test_reference_solution_review.py `
+            tests/bank/test_java_reference_quality.py `
+            tests/multilang/test_reference_solutions.py `
+            -k "catalogue_item_does_not_expose_class or release_catalogue or catalogue_has_breadth or every_exercise_has_a_private_test_floor or class_runner or class_harnesses or cross_level or real_class or promised_language or procedural_and_dummy or contiguous_hard or seeded or geometry_dp or line_tiling or final_tree or remaining_final or isomorphism or convex_ray or manifest_is_exactly or complete_runner_schema or data_only or representative_contracts or ids_schema or literal_fixtures or final_eight or reference_solution or reference_formatting or reference_quality or review_snapshot or best_answer_review or reference_source_change"
 
       - name: Build the Windows learner ZIP
         shell: pwsh

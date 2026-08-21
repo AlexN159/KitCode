@@ -333,7 +333,7 @@ def _array_bank() -> list[dict]:
         ("Reverse Numbers", "Easy", ["arrays", "two-pointers"], f"{list_input} Print them in reverse order, separated by one space.", [("4\n1 2 3 4\n", "4 3 2 1"),("1\n8\n", "8"),("0\n\n", "")], "    print(*reversed(nums))", "O(n) time, O(n) output space"),
         ("Adjacent Difference Sum", "Easy", ["arrays", "iteration"], f"{list_input} Print the sum of absolute differences between every adjacent pair.", [("4\n1 7 3 5\n", "12"),("1\n8\n", "0"),("3\n-2 -2 4\n", "6")], "    print(sum(abs(nums[i] - nums[i-1]) for i in range(1, n)))", "O(n) time, O(1) extra space"),
         ("Running Totals", "Easy", ["arrays", "prefix-sum"], f"{list_input} Print the cumulative sum after each integer, separated by one space.", [("4\n3 -1 2 5\n", "3 2 4 9"),("1\n7\n", "7"),("0\n\n", "")], "    total = 0\n    answer = []\n    for x in nums:\n        total += x\n        answer.append(total)\n    print(*answer)", "O(n) time, O(n) output space"),
-        ("Second Distinct Largest", "Medium", ["arrays", "selection"], f"{list_input} Print the second-largest distinct value, or `NONE` if fewer than two distinct values exist.", [("5\n4 1 4 3 2\n", "3"),("3\n7 7 7\n", "NONE"),("2\n-1 -2\n", "-2")], "    values = sorted(set(nums), reverse=True)\n    print(values[1] if len(values) > 1 else 'NONE')", "O(n log n) time, O(n) space"),
+        ("Second Distinct Largest", "Medium", ["arrays", "selection"], f"{list_input} Print the second-largest distinct value, or `NONE` if fewer than two distinct values exist.", [("5\n4 1 4 3 2\n", "3"),("3\n7 7 7\n", "NONE"),("2\n-1 -2\n", "-2")], "    largest = second = None\n    for value in nums:\n        if value == largest or value == second:\n            continue\n        if largest is None or value > largest:\n            second, largest = largest, value\n        elif second is None or value > second:\n            second = value\n    print(second if second is not None else 'NONE')", "O(n) time, O(1) extra space"),
         ("First Peak Index", "Medium", ["arrays", "iteration"], f"{list_input} Print the first index i whose value is greater than both neighbors. Endpoints are not peaks; print -1 when none exists.", [("5\n1 3 2 4 4\n", "1"),("3\n1 2 3\n", "-1"),("5\n0 2 1 2 0\n", "1")], "    answer = -1\n    for i in range(1, n - 1):\n        if nums[i] > nums[i-1] and nums[i] > nums[i+1]:\n            answer = i\n            break\n    print(answer)", "O(n) time, O(1) extra space"),
         ("Move Zeros to End", "Easy", ["arrays", "two-pointers"], f"{list_input} Keep non-zero values in their original order, then append all zeros.", [("6\n0 1 0 3 12 0\n", "1 3 12 0 0 0"),("3\n0 0 0\n", "0 0 0"),("3\n1 2 3\n", "1 2 3")], "    answer = [x for x in nums if x != 0]\n    answer += [0] * (n - len(answer))\n    print(*answer)", "O(n) time, O(n) space"),
         ("Sorted Unique", "Easy", ["arrays", "hashing"], f"{list_input} Print the distinct values in ascending order.", [("6\n3 1 3 2 1 2\n", "1 2 3"),("1\n5\n", "5"),("0\n\n", "")], "    print(*sorted(set(nums)))", "O(n log n) time, O(n) space"),
@@ -423,7 +423,7 @@ def _parametric_bank() -> list[dict]:
       ("range-sum-query","Range Sum Query","Easy",["prefix-sum","arrays"],"Read n, the list, then inclusive indices l and r. Print the sum from l through r.",[("5\n2 4 1 3 5\n1 3\n","8"),("1\n7\n0 0\n","7"),("4\n-1 2 -3 4\n0 2\n","-2")],'''    left, right = map(int, tokens[n + 1:n + 3])
     prefix = [0]
     for value in nums: prefix.append(prefix[-1] + value)
-    print(prefix[right + 1] - prefix[left])''',"O(n) preprocessing, O(1) query"),
+    print(prefix[right + 1] - prefix[left])''',"O(n) preprocessing time and space, O(1) query time"),
       ("product-except-self","Product Except Self","Medium",["arrays","prefix-sum"],"Print for each position the product of every other integer. Do not use division.",[("4\n1 2 3 4\n","24 12 8 6"),("3\n0 2 3\n","6 0 0"),("1\n9\n","1")],'''    answer = [1] * n
     prefix = 1
     for i, value in enumerate(nums):
@@ -1261,6 +1261,12 @@ from backend.java_curriculum_part4 import JAVA_CURRICULUM_PART4
 from backend.java_curriculum_part5 import JAVA_CURRICULUM_PART5
 from backend.sql_curriculum_part1 import SQL_CURRICULUM_PART1
 from backend.sql_curriculum_part2 import SQL_CURRICULUM_PART2
+from backend.reference_solution_formatting import (
+    SQL_AUXILIARY_SPACE_NOTE,
+    format_java_reference,
+    format_sql_reference,
+)
+from backend.python_reference_formatting import format_python_reference
 
 for _multilang_exercise in MULTILANG_EXERCISES:
     if _multilang_exercise["id"] in EXERCISES:
@@ -1299,12 +1305,31 @@ for _curated_exercise in (
         raise RuntimeError(f"duplicate exercise id: {_curated_exercise['id']}")
     EXERCISES[_curated_exercise["id"]] = _curated_exercise
 
+# Curriculum modules use compact declarations, while accepted-reference code is
+# learner-facing. Format the stored corpus once so presentation and line counts
+# describe readable source rather than declaration packing.
+for _reference_exercise in EXERCISES.values():
+    if _reference_exercise.get("language") == "python":
+        _reference_exercise["solution"] = format_python_reference(_reference_exercise["solution"])
+    elif _reference_exercise.get("language") == "java":
+        _reference_exercise["solution"] = format_java_reference(_reference_exercise["solution"])
+    elif _reference_exercise.get("language") == "sql":
+        _reference_exercise["solution"] = format_sql_reference(_reference_exercise["solution"])
+        _reference_exercise["reference_complexity_note"] = SQL_AUXILIARY_SPACE_NOTE
+
 
 def _public_view(exercise: dict, include_hidden: bool = False) -> dict:
     # SQL fixtures are test data just like private cases.  They must never
     # appear in the exercise-detail response, or the answer can be tailored to
     # a fixed dataset rather than written as a general query.
-    data = {key: value for key, value in exercise.items() if key not in {"hidden_tests", "sql_setup", "setup_sql"}}
+    data = {
+        key: value
+        for key, value in exercise.items()
+        if key not in {
+            "hidden_tests", "sql_setup", "setup_sql", "solution", "answer",
+            "reference_solution",
+        }
+    }
     if "public_tests" in data:
         data["public_tests"] = [
             # A class-exercise harness is judge-owned executable code.  It is

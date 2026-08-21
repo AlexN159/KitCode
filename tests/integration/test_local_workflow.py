@@ -35,6 +35,13 @@ def test_complete_local_practice_workflow(tmp_path, monkeypatch):
     hidden = [result for result in submission["results"] if result["visibility"] == "hidden"]
     assert hidden and all(result["input"] is None and "expected_output" not in result for result in hidden)
     assert api.get(f"/api/progress/{exercise_id}").json()["status"] == "completed"
+    reference = api.post(
+        f"/api/exercises/{exercise_id}/reference-solution",
+        json={"code": solution, "language": "python"},
+    )
+    assert reference.status_code == 200
+    assert reference.json()["solution"] == solution
+    assert "hidden_tests" not in reference.text and "public_tests" not in reference.text
 
 
 def test_static_app_and_request_limits_are_packaged():

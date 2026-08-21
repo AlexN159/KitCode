@@ -385,12 +385,12 @@ _CONTRACTS = {
  'unique-prefixes': ('Input line 1 is n; the next n lines are distinct lowercase words, with no word a prefix of another. For each word in input order, output its shortest prefix that no other input word starts with; separate prefixes by one space.', ['No input word is a prefix of another input word.', 'Words contain lowercase English letters only.'], ['Count prefixes in a trie or dictionary.', 'Keep the original word order for output.'], 'O(total word length) time and space.'),
  'email-normalisation': ('Input line 1 is n; the next n lines are email addresses. Lowercase every address; in its local part, ignore dots and everything from the first `+` onward. Keep the domain unchanged apart from lowercasing. Output the number of distinct normalised addresses.', ['Each address has exactly one `@`.', 'The normalisation rule applies only to the local part.'], ['Split at `@` first.', 'Put normalised addresses in a set.'], 'O(total input length) time and space.'),
  'text-justify': ('Input line 1 is width W; line 2 contains words separated by single spaces. Greedily pack as many words as fit. Output every line at width W: non-final multiword lines distribute extra spaces left to right; one-word and final lines are left-justified with trailing spaces. The judge ignores whitespace only at the very end of the complete output, not spaces before an output newline.', ['Every word length is at most W.', 'Interior trailing spaces in output lines are significant.'], ['Track word characters separately from gaps.', 'Use divmod to distribute spaces.'], 'O(total text length) time and space.'),
- 'wildcard-capture': ('Input line 1 is a pattern containing literal characters and `*`; line 2 is text. Each `*` captures the shortest possible string that allows the complete pattern to match. Output captures in star order separated by `|`, or `NO` if no full match exists.', ['Only `*` is special.', 'A capture may be empty.'], ['Anchor the match at both ends.', 'Make each wildcard non-greedy.'], 'O(L) time for these bounded patterns.'),
+ 'wildcard-capture': ('Input line 1 is a pattern containing literal characters and `*`; line 2 is text. Each `*` captures the shortest possible string that allows the complete pattern to match. Output captures in star order separated by `|`, or `NO` if no full match exists.', ['Only `*` is special.', 'A capture may be empty.'], ['Work from the final literal segment backwards.', 'For each segment, record text positions that can complete the remaining suffix.'], 'O(P*T) time and O(S*T) space, where P is pattern length, T is text length, and S is the number of stars.'),
  'escaped-codec': ('Input line 1 is `E` or `D`. The payload is every remaining character after that line, excluding exactly one final input-terminator newline when present. `E` replaces backslash, tab, and newline by `\\\\`, `\\t`, and `\\n`; `D` reverses those three forms. Output the transformed payload; the judge ignores whitespace only at the very end of the complete output.', ['The encoded payload uses only the three stated escape forms.', 'A payload may span multiple physical lines; two final newlines represent a payload ending in one newline.'], ['Separate the mode line without splitting the remaining payload into records.', 'Remove at most one final terminator before transforming.'], 'O(L) time and space.'),
  'functional-cycle-data': ('Input line 1 is n; line 2 gives n successors, each in 0..n-1. For every start vertex 0..n-1, output one line: edges before first entering its eventual cycle, then that cycle length.', ['The graph has exactly one outgoing edge per vertex.', 'Output lines are in vertex-number order.'], ['Walk until a vertex repeats.', 'Record the first step at which each visited vertex appeared.'], 'O(n^2) time and O(n) extra space.'),
  'prufer-encode': ('Input line 1 is n; the next n-1 lines are undirected edges of a tree on vertices 0..n-1. Repeatedly remove the smallest numbered leaf and output its neighbour. Print the n-2 values separated by spaces.', ['The input is a tree.', 'The n=2 output is empty.'], ['Maintain every vertex degree.', 'Select the smallest remaining leaf each round.'], 'O(n^2) time and O(n) space.'),
  'prufer-decode': ('Input line 1 is n; line 2 contains n-2 Prüfer values (and is blank when n=2). Decode using the smallest available leaf. Output canonical edges as `u-v`, each endpoint ordered, with edges lexicographically sorted and separated by spaces.', ['All Prüfer values are in 0..n-1.', 'The n=2 sequence is empty.'], ['Start every vertex with degree 1.', 'Select the smallest available leaf each round.'], 'O(n^2) time and O(n) space.'),
- 'triangle-count': ('Input line 1 is n m; the next m lines are distinct undirected edges. Output the number of unordered triples of vertices that form a triangle.', ['No self-loops or duplicate edges.', 'Vertices are 0..n-1.'], ['Intersect neighbour sets for an ordered edge.', 'Count each triangle once by vertex order.'], 'O(sum of degree intersections) time.'),
+ 'triangle-count': ('Input line 1 is n m; the next m lines are distinct undirected edges. Output the number of unordered triples of vertices that form a triangle.', ['No self-loops or duplicate edges.', 'Vertices are 0..n-1.'], ['Intersect neighbour sets for an ordered edge.', 'Count each triangle once by vertex order.'], 'O(n + m + sum of degree intersections) time and O(n + m) space.'),
  'euler-kind': ('Input line 1 is n m; the next m lines are undirected edges. Ignore isolated vertices for connectivity. Output `CIRCUIT` if all non-isolated vertices are connected and have even degree, `TRAIL` if exactly two have odd degree, else `NONE`.', ['A graph with no edges is a circuit.', 'No self-loops or duplicate edges.'], ['Check connectivity before counting odd degrees.', 'Isolated vertices do not break connectivity.'], 'O(n+m) time and space.'),
  'complement-components': ('Input line 1 is n m; the next m lines are undirected edges. In the complement graph, two different vertices are adjacent exactly when they are not an input edge. Output its number of connected components.', ['No self-loops or duplicate edges.', 'Vertices are 0..n-1.'], ['Keep an unvisited set.', 'From a vertex, add all remaining non-neighbours.'], 'O(n^2) time and O(n+m) space.'),
  'dag-query-reachability': ('Input line 1 is n m; the next m lines are directed edges of a DAG. Then line `m+2` is q, followed by q ordered queries `s t`. Output `YES` for each query iff a directed path from s to t exists (a zero-edge path means s reaches itself); separate answers by spaces.', ['Edges are directed; do not add reverse edges.', 'The input graph is acyclic.'], ['Build directed adjacency lists.', 'A DFS/BFS per query is sufficient for the stated bounds.'], 'O(q(n+m)) time and O(n+m) space.'),
@@ -416,7 +416,7 @@ _CONTRACTS = {
  'union-intersection-length': ('Input line 1 is n m; next n lines are set-A half-open intervals and next m lines set-B intervals. Merge each set’s overlapping or touching intervals, then output the length of the intersection of the two unions.', ['Endpoints are integers and start <= end.', 'Zero-length intervals add no length.'], ['Merge each collection independently.', 'Walk the two merged lists with two pointers.'], 'O((n+m) log(n+m)) time and O(n+m) space.'),
  'minimum-target-cover': ('Input line 1 is n L R; next n lines are half-open candidate intervals. Output the fewest intervals whose union covers every point of `[L,R)`, or `-1` if impossible.', ['L <= R and endpoints are integers.', 'Touching intervals may extend coverage continuously.'], ['Among intervals starting before current coverage, take the furthest end.', 'Stop if no interval extends the frontier.'], 'O(n log n) time and O(n) space.'),
  'shell-tokenizer': ('Input: one shell-like command line. Whitespace separates tokens except inside single or double quotes; a backslash escapes the next character outside single quotes. Output decoded tokens joined by `|`.', ['Quotes are balanced.', 'There are no shell expansions or comments.'], ['Track quote state while scanning.', 'Do not include surrounding quotes.'], 'O(L) time and space.'),
- 'parking-ledger': ('Input line 1 is `rate q`; next q lines are `ENTER id time` or `EXIT id time`. An EXIT for an active id prints `id fee` where fee is `(time-enter_time)*rate`; unmatched EXITs do nothing. Finally output `ACTIVE` followed by active ids in lexicographic order.', ['Times are integers and each id has at most one active entry.', 'Commands are processed in order.'], ['Map each active id to its entry time.', 'Remove an id only on a matched EXIT.'], 'O(q log q) time including final sorting.'),
+ 'parking-ledger': ('Input line 1 is `rate q`; next q lines are `ENTER id time` or `EXIT id time`. An EXIT for an active id prints `id fee` where fee is `(time-enter_time)*rate`; unmatched EXITs do nothing. Finally output `ACTIVE` followed by active ids in lexicographic order.', ['Times are integers and each id has at most one active entry.', 'Commands are processed in order.'], ['Map each active id to its entry time.', 'Remove an id only on a matched EXIT.'], 'O(q log q) time including final sorting and O(q) space.'),
  'tournament-scoreboard': ('Input line 1 is q; next q lines are `WIN player` or `DRAW player1 player2`. A win gives 3 points; each draw participant gets 1. Output `name:points` entries sorted by descending points then ascending name, separated by spaces.', ['Names are case-sensitive non-whitespace words.', 'Players appear only through commands.'], ['Accumulate points in a map.', 'Sort by the stated two-key order.'], 'O(q + p log p) time and O(p) space.'),
  'undo-redo-buffer': ('Input line 1 is q; next q lines are `APPEND text`, `DELETE k`, `UNDO`, or `REDO`. APPEND and DELETE save the prior buffer and clear redo; DELETE removes the final k characters. UNDO/REDO with an empty relevant history are no-ops. Output final text.', ['0 <= k <= current length.', 'APPEND text is the remainder of its line and may contain spaces.'], ['Store prior states on two stacks.', 'A new edit clears redo history.'], 'O(total edited characters) time and space.'),
  'packet-reassembly': ('Input line 1 is `total m`; next m lines are `index payload`. Keep the first packet seen for each index. If any index 0..total-1 is absent, output `MISSING` followed by missing indices ascending; otherwise concatenate payloads by index.', ['0 <= index < total.', 'Payload is the remainder of the line and may contain spaces.'], ['Use a dictionary with setdefault semantics.', 'Check all required indices after reading.'], 'O(total+m) time and space.'),
@@ -1275,3 +1275,1157 @@ for _number, _bounds in _OOP_RUNNER_BOUNDS.items():
 # part of every script exercise's actual input/output contract.
 for _item in PYTHON_CURATED_289_353[:57]:
     _item["constraints"][-1] += " Valid serialized CLI input is at most 12,000 characters and serialized output is at most 22,000 characters."
+
+# Each of the script drills above used to embed its whole ten-problem family in
+# the submitted reference program and branch on a private mode token.  That was
+# compact for the catalogue author but a poor answer to show a learner: it
+# contained unrelated algorithms and hid the actual solution.  These direct
+# references deliberately keep only the code for the selected task.
+_TASK_REFERENCE_BODIES = {
+"chemical-formula": r'''
+from collections import defaultdict
+
+
+def solve():
+    formula = input().strip()
+    stack = [defaultdict(int)]
+    index = 0
+    while index < len(formula):
+        if formula[index] == "(":
+            stack.append(defaultdict(int))
+            index += 1
+            continue
+        if formula[index] == ")":
+            group = stack.pop()
+            index += 1
+            start = index
+            while index < len(formula) and formula[index].isdigit():
+                index += 1
+            for atom, count in group.items():
+                stack[-1][atom] += count * int(formula[start:index] or 1)
+            continue
+        start = index
+        index += 1
+        while index < len(formula) and formula[index].islower():
+            index += 1
+        atom = formula[start:index]
+        start = index
+        while index < len(formula) and formula[index].isdigit():
+            index += 1
+        stack[-1][atom] += int(formula[start:index] or 1)
+    print(*[f"{atom}{stack[0][atom]}" for atom in sorted(stack[0])])
+''',
+"brace-expansion": r'''
+def solve():
+    text = input().strip()
+    expanded = [""]
+    index = 0
+    while index < len(text):
+        if text[index] == "{":
+            end = text.index("}", index)
+            choices = text[index + 1 : end].split(",")
+            expanded = [prefix + choice for prefix in expanded for choice in choices]
+            index = end + 1
+        else:
+            expanded = [prefix + text[index] for prefix in expanded]
+            index += 1
+    print(*sorted(expanded))
+''',
+"quoted-csv": r'''
+import csv
+
+
+def solve():
+    print("|".join(next(csv.reader([input().rstrip("\n")]))))
+''',
+"cidr-membership": r'''
+from ipaddress import ip_address, ip_network
+
+
+def solve():
+    network = ip_network(input().strip(), strict=False)
+    print("YES" if ip_address(input().strip()) in network else "NO")
+''',
+"roman-canonical": r'''
+def solve():
+    roman = input().strip()
+    values = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+    number = sum(
+        (
+            -values[ch]
+            if i + 1 < len(roman) and values[ch] < values[roman[i + 1]]
+            else values[ch]
+        )
+        for i, ch in enumerate(roman)
+    )
+    parts = [
+        (1000, "M"),
+        (900, "CM"),
+        (500, "D"),
+        (400, "CD"),
+        (100, "C"),
+        (90, "XC"),
+        (50, "L"),
+        (40, "XL"),
+        (10, "X"),
+        (9, "IX"),
+        (5, "V"),
+        (4, "IV"),
+        (1, "I"),
+    ]
+    canonical = ""
+    for value, symbol in parts:
+        canonical += symbol * (number // value)
+        number %= value
+    print("YES" if roman == canonical else "NO")
+''',
+"unique-prefixes": r'''
+def solve():
+    count = int(input())
+    words = [input().strip() for _ in range(count)]
+    answer = []
+    for word in words:
+        for length in range(1, len(word) + 1):
+            prefix = word[:length]
+            if sum(other.startswith(prefix) for other in words) == 1:
+                answer.append(prefix)
+                break
+    print(*answer)
+''',
+"email-normalisation": r'''
+def solve():
+    addresses = set()
+    for _ in range(int(input())):
+        local, domain = input().strip().lower().split("@")
+        addresses.add(local.split("+")[0].replace(".", "") + "@" + domain)
+    print(len(addresses))
+''',
+"text-justify": r'''
+def solve():
+    width = int(input())
+    words = input().split()
+    lines = []
+    line = []
+    letters = 0
+    for word in words:
+        if line and letters + len(word) + len(line) > width:
+            if len(line) == 1:
+                lines.append(line[0] + " " * (width - letters))
+            else:
+                spaces, extra = divmod(width - letters, len(line) - 1)
+                lines.append(
+                    "".join(
+                        word + " " * (spaces + (i < extra))
+                        for i, word in enumerate(line[:-1])
+                    )
+                    + line[-1]
+                )
+            line = []
+            letters = 0
+        line.append(word)
+        letters += len(word)
+    lines.append(" ".join(line).ljust(width))
+    print("\n".join(lines))
+''',
+"wildcard-capture": r'''
+def solve():
+    pattern = input().rstrip("\n")
+    text = input().rstrip("\n")
+    parts = pattern.split("*")
+    if len(parts) == 1:
+        print("" if text == pattern else "NO")
+        return
+    if not text.startswith(parts[0]):
+        print("NO")
+        return
+
+    length = len(text)
+    possible = [[False] * (length + 1) for _ in parts]
+    last = len(parts) - 1
+    for position in range(length + 1):
+        possible[last][position] = (
+            text.startswith(parts[last], position)
+            and position + len(parts[last]) == length
+        )
+    for part_index in range(last - 1, 0, -1):
+        suffix_possible = [False] * (length + 2)
+        for position in range(length, -1, -1):
+            suffix_possible[position] = (
+                possible[part_index + 1][position]
+                or suffix_possible[position + 1]
+            )
+        literal = parts[part_index]
+        for position in range(length + 1):
+            end = position + len(literal)
+            possible[part_index][position] = (
+                end <= length
+                and text.startswith(literal, position)
+                and suffix_possible[end]
+            )
+
+    captures = []
+    position = len(parts[0])
+    for part_index in range(1, len(parts)):
+        next_position = next(
+            (
+                candidate
+                for candidate in range(position, length + 1)
+                if possible[part_index][candidate]
+            ),
+            None,
+        )
+        if next_position is None:
+            print("NO")
+            return
+        captures.append(text[position:next_position])
+        position = next_position + len(parts[part_index])
+    print("|".join(captures))
+''',
+"escaped-codec": r'''
+import sys
+
+
+def solve():
+    action = input().strip()
+    text = sys.stdin.read()
+    if text.endswith("\n"):
+        text = text[:-1]
+    if action == "E":
+        print(text.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t"))
+        return
+    decoded = []
+    index = 0
+    escapes = {"n": "\n", "t": "\t", "\\": "\\"}
+    while index < len(text):
+        if text[index] == "\\" and index + 1 < len(text):
+            decoded.append(escapes[text[index + 1]])
+            index += 2
+        else:
+            decoded.append(text[index])
+            index += 1
+    print("".join(decoded), end="")
+''',
+"functional-cycle-data": r'''
+def solve():
+    count = int(input())
+    next_node = list(map(int, input().split()))
+    answer = []
+    for start in range(count):
+        seen = {}
+        node = start
+        while node not in seen:
+            seen[node] = len(seen)
+            node = next_node[node]
+        answer.append(f"{seen[node]} {len(seen) - seen[node]}")
+    print("\n".join(answer))
+''',
+"prufer-encode": r'''
+def solve():
+    count = int(input())
+    graph = [set() for _ in range(count)]
+    for _ in range(count - 1):
+        left, right = map(int, input().split())
+        graph[left].add(right)
+        graph[right].add(left)
+    code = []
+    for _ in range(count - 2):
+        leaf = min(node for node in range(count) if len(graph[node]) == 1)
+        neighbour = graph[leaf].pop()
+        graph[neighbour].remove(leaf)
+        code.append(neighbour)
+    print(*code)
+''',
+"prufer-decode": r'''
+def solve():
+    count = int(input())
+    code = list(map(int, input().split())) if count > 2 else []
+    degree = [1] * count
+    for node in code:
+        degree[node] += 1
+    edges = []
+    for node in code:
+        leaf = min(index for index, value in enumerate(degree) if value == 1)
+        edges.append(tuple(sorted((leaf, node))))
+        degree[leaf] -= 1
+        degree[node] -= 1
+    ends = [node for node, value in enumerate(degree) if value == 1]
+    edges.append(tuple(ends))
+    print(*[f"{left}-{right}" for left, right in sorted(edges)])
+''',
+"triangle-count": r'''
+def solve():
+    count, edges = map(int, input().split())
+    graph = [set() for _ in range(count)]
+    for _ in range(edges):
+        left, right = map(int, input().split())
+        graph[left].add(right)
+        graph[right].add(left)
+    print(
+        sum(
+            1
+            for left in range(count)
+            for middle in graph[left]
+            if left < middle
+            for right in graph[left] & graph[middle]
+            if middle < right
+        )
+    )
+''',
+"euler-kind": r'''
+def solve():
+    count, edges = map(int, input().split())
+    graph = [set() for _ in range(count)]
+    for _ in range(edges):
+        left, right = map(int, input().split())
+        graph[left].add(right)
+        graph[right].add(left)
+    active = [node for node in range(count) if graph[node]]
+    seen = set(active[:1])
+    stack = active[:1]
+    while stack:
+        node = stack.pop()
+        for neighbour in graph[node]:
+            if neighbour not in seen:
+                seen.add(neighbour)
+                stack.append(neighbour)
+    if any(node not in seen for node in active):
+        print("NONE")
+        return
+    odd = sum(len(neighbours) % 2 for neighbours in graph)
+    print("CIRCUIT" if odd == 0 else "TRAIL" if odd == 2 else "NONE")
+''',
+"complement-components": r'''
+def solve():
+    count, edges = map(int, input().split())
+    graph = [set() for _ in range(count)]
+    for _ in range(edges):
+        left, right = map(int, input().split())
+        graph[left].add(right)
+        graph[right].add(left)
+    unseen = set(range(count))
+    components = 0
+    while unseen:
+        components += 1
+        stack = [unseen.pop()]
+        while stack:
+            node = stack.pop()
+            neighbours = unseen - graph[node]
+            unseen -= neighbours
+            stack.extend(neighbours)
+    print(components)
+''',
+"dag-query-reachability": r'''
+def solve():
+    count, edges = map(int, input().split())
+    graph = [[] for _ in range(count)]
+    for _ in range(edges):
+        left, right = map(int, input().split())
+        graph[left].append(right)
+    answer = []
+    for _ in range(int(input())):
+        start, target = map(int, input().split())
+        seen = {start}
+        stack = [start]
+        while stack:
+            node = stack.pop()
+            for neighbour in graph[node]:
+                if neighbour not in seen:
+                    seen.add(neighbour)
+                    stack.append(neighbour)
+        answer.append("YES" if target in seen else "NO")
+    print(*answer)
+''',
+"minimum-reversals": r'''
+from collections import deque
+
+
+def solve():
+    count, edges = map(int, input().split())
+    graph = [[] for _ in range(count)]
+    for _ in range(edges):
+        left, right = map(int, input().split())
+        graph[left].append((right, 0))
+        graph[right].append((left, 1))
+    distance = [float("inf")] * count
+    distance[0] = 0
+    queue = deque([0])
+    while queue:
+        node = queue.popleft()
+        for neighbour, cost in graph[node]:
+            if distance[node] + cost < distance[neighbour]:
+                distance[neighbour] = distance[node] + cost
+                (queue.appendleft if cost == 0 else queue.append)(neighbour)
+    print(distance[-1] if distance[-1] < float("inf") else -1)
+''',
+"shortest-path-counts": r'''
+from collections import deque
+
+
+def solve():
+    count, edges = map(int, input().split())
+    graph = [[] for _ in range(count)]
+    for _ in range(edges):
+        left, right = map(int, input().split())
+        graph[left].append(right)
+        graph[right].append(left)
+    start = int(input())
+    distance = [-1] * count
+    ways = [0] * count
+    distance[start] = 0
+    ways[start] = 1
+    queue = deque([start])
+    while queue:
+        node = queue.popleft()
+        for neighbour in graph[node]:
+            if distance[neighbour] < 0:
+                distance[neighbour] = distance[node] + 1
+                queue.append(neighbour)
+            if distance[neighbour] == distance[node] + 1:
+                ways[neighbour] = (ways[neighbour] + ways[node]) % 1_000_000_007
+    print(*ways)
+''',
+"leaf-removal-rounds": r'''
+from collections import deque
+
+
+def solve():
+    count, edges = map(int, input().split())
+    graph = [[] for _ in range(count)]
+    for _ in range(edges):
+        left, right = map(int, input().split())
+        graph[left].append(right)
+        graph[right].append(left)
+    degree = list(map(len, graph))
+    rounds = [0] * count
+    queue = deque(node for node in range(count) if degree[node] <= 1)
+    while queue:
+        node = queue.popleft()
+        for neighbour in graph[node]:
+            if degree[neighbour] > 1:
+                degree[neighbour] -= 1
+                rounds[neighbour] = max(rounds[neighbour], rounds[node] + 1)
+                if degree[neighbour] == 1:
+                    queue.append(neighbour)
+        degree[node] = 0
+    print(*rounds)
+''',
+}
+
+def _direct_reference(body: str) -> str:
+    return body + "\n\nif __name__ == '__main__':\n    solve()\n"
+
+for _item in PYTHON_CURATED_289_353[:20]:
+    _item["solution"] = _direct_reference(_TASK_REFERENCE_BODIES[_item["concept_token"]])
+
+_TASK_REFERENCE_BODIES.update({
+"eight-direction-word-count": r'''
+def solve():
+    rows, cols = map(int, input().split())
+    word = input().strip()
+    grid = [input().strip() for _ in range(rows)]
+    directions = [
+        (dr, dc) for dr in (-1, 0, 1) for dc in (-1, 0, 1) if (dr, dc) != (0, 0)
+    ]
+    total = 0
+    for row in range(rows):
+        for col in range(cols):
+            for dr, dc in directions:
+                if all(
+                    0 <= row + dr * step < rows
+                    and 0 <= col + dc * step < cols
+                    and grid[row + dr * step][col + dc * step] == letter
+                    for step, letter in enumerate(word)
+                ):
+                    total += 1
+    print(total)
+''',
+"latin-square-validation": r'''
+def solve():
+    size, _ = map(int, input().split())
+    square = [list(map(int, input().split())) for _ in range(size)]
+    expected = set(range(1, size + 1))
+    rows_ok = all(set(row) == expected for row in square)
+    columns_ok = all(
+        {square[row][col] for row in range(size)} == expected for col in range(size)
+    )
+    print("YES" if rows_ok and columns_ok else "NO")
+''',
+"largest-plus-arm": r'''
+def solve():
+    rows, cols = map(int, input().split())
+    grid = [input().strip() for _ in range(rows)]
+    best = 0
+    for row in range(rows):
+        for col in range(cols):
+            arm = 0
+            while (
+                row - arm >= 0
+                and row + arm < rows
+                and col - arm >= 0
+                and col + arm < cols
+                and all(
+                    grid[r][c] == "1"
+                    for r, c in (
+                        (row - arm, col),
+                        (row + arm, col),
+                        (row, col - arm),
+                        (row, col + arm),
+                    )
+                )
+            ):
+                best = max(best, arm + 1)
+                arm += 1
+    print(best)
+''',
+"toroidal-shortest-path": r'''
+from collections import deque
+
+
+def solve():
+    rows, cols = map(int, input().split())
+    grid = [input().strip() for _ in range(rows)]
+    start = tuple(map(int, input().split()))
+    target = tuple(map(int, input().split()))
+    distance = {start: 0}
+    queue = deque([start])
+    while queue:
+        row, col = queue.popleft()
+        for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            next_cell = ((row + dr) % rows, (col + dc) % cols)
+            if grid[next_cell[0]][next_cell[1]] != "#" and next_cell not in distance:
+                distance[next_cell] = distance[row, col] + 1
+                queue.append(next_cell)
+    print(distance.get(target, -1))
+''',
+"minesweeper-counts": r'''
+def solve():
+    rows, cols = map(int, input().split())
+    grid = [input().strip() for _ in range(rows)]
+    output = []
+    for row in range(rows):
+        line = ""
+        for col in range(cols):
+            line += (
+                "*"
+                if grid[row][col] == "*"
+                else str(
+                    sum(
+                        0 <= row + dr < rows
+                        and 0 <= col + dc < cols
+                        and grid[row + dr][col + dc] == "*"
+                        for dr in (-1, 0, 1)
+                        for dc in (-1, 0, 1)
+                    )
+                )
+            )
+        output.append(line)
+    print("\n".join(output))
+''',
+"conway-life": r'''
+def solve():
+    rows, cols = map(int, input().split())
+    steps = int(input())
+    grid = [list(input().strip()) for _ in range(rows)]
+    for _ in range(steps):
+        next_grid = [["."] * cols for _ in range(rows)]
+        for row in range(rows):
+            for col in range(cols):
+                neighbours = sum(
+                    0 <= row + dr < rows
+                    and 0 <= col + dc < cols
+                    and grid[row + dr][col + dc] == "#"
+                    for dr in (-1, 0, 1)
+                    for dc in (-1, 0, 1)
+                    if (dr, dc) != (0, 0)
+                )
+                next_grid[row][col] = (
+                    "#"
+                    if neighbours == 3 or grid[row][col] == "#" and neighbours == 2
+                    else "."
+                )
+        grid = next_grid
+    print("\n".join("".join(row) for row in grid))
+''',
+"ring-rotation": r'''
+def solve():
+    rows, cols = map(int, input().split())
+    turns = int(input())
+    grid = [input().split() for _ in range(rows)]
+    for layer in range(min(rows, cols) // 2):
+        cells = (
+            [(layer, col) for col in range(layer, cols - layer)]
+            + [(row, cols - layer - 1) for row in range(layer + 1, rows - layer)]
+            + [
+                (rows - layer - 1, col)
+                for col in range(cols - layer - 2, layer - 1, -1)
+            ]
+            + [(row, layer) for row in range(rows - layer - 2, layer, -1)]
+        )
+        values = [grid[row][col] for row, col in cells]
+        shift = turns % len(cells)
+        values = values[-shift:] + values[:-shift]
+        for (row, col), value in zip(cells, values):
+            grid[row][col] = value
+    print("\n".join(" ".join(row) for row in grid))
+''',
+"diagonal-zigzag": r'''
+def solve():
+    rows, cols = map(int, input().split())
+    grid = [input().split() for _ in range(rows)]
+    output = []
+    for diagonal in range(rows + cols - 1):
+        cells = [
+            grid[row][diagonal - row]
+            for row in range(max(0, diagonal - cols + 1), min(rows - 1, diagonal) + 1)
+        ]
+        output.extend(reversed(cells) if diagonal % 2 == 0 else cells)
+    print(*output)
+''',
+"submatrix-target-count": r'''
+from collections import Counter
+
+
+def solve():
+    rows, cols = map(int, input().split())
+    target = int(input())
+    grid = [list(map(int, input().split())) for _ in range(rows)]
+    total = 0
+    for top in range(rows):
+        column_sums = [0] * cols
+        for bottom in range(top, rows):
+            for col in range(cols):
+                column_sums[col] += grid[bottom][col]
+            seen = Counter({0: 1})
+            prefix = 0
+            for value in column_sums:
+                prefix += value
+                total += seen[prefix - target]
+                seen[prefix] += 1
+    print(total)
+''',
+"knight-blocked-distance": r'''
+from collections import deque
+
+
+def solve():
+    rows, cols = map(int, input().split())
+    grid = [input().strip() for _ in range(rows)]
+    start = tuple(map(int, input().split()))
+    target = tuple(map(int, input().split()))
+    distance = {start: 0}
+    queue = deque([start])
+    moves = ((-2, -1), (-2, 1), (-1, -2), (-1, 2), (1, -2), (1, 2), (2, -1), (2, 1))
+    while queue:
+        row, col = queue.popleft()
+        for dr, dc in moves:
+            next_cell = row + dr, col + dc
+            if (
+                0 <= next_cell[0] < rows
+                and 0 <= next_cell[1] < cols
+                and grid[next_cell[0]][next_cell[1]] != "#"
+                and next_cell not in distance
+            ):
+                distance[next_cell] = distance[row, col] + 1
+                queue.append(next_cell)
+    print(distance.get(target, -1))
+''',
+"exact-coverage-lengths": r'''
+def solve():
+    count = int(input())
+    intervals = [tuple(map(int, input().split())) for _ in range(count)]
+    points = sorted({point for interval in intervals for point in interval})
+    answer = []
+    for coverage in range(1, count + 1):
+        answer.append(
+            sum(
+                points[index + 1] - points[index]
+                for index in range(len(points) - 1)
+                if sum(
+                    left <= points[index] and points[index + 1] <= right
+                    for left, right in intervals
+                )
+                == coverage
+            )
+        )
+    print(*answer)
+''',
+"point-coverage-queries": r'''
+def solve():
+    intervals_count, queries_count = map(int, input().split())
+    intervals = [tuple(map(int, input().split())) for _ in range(intervals_count)]
+    queries = [int(input()) for _ in range(queries_count)]
+    print(
+        *[sum(left <= point < right for left, right in intervals) for point in queries]
+    )
+''',
+"strict-containment-pairs": r'''
+def solve():
+    count = int(input())
+    intervals = [tuple(map(int, input().split())) for _ in range(count)]
+    print(
+        sum(
+            left < inner_left and inner_right < right
+            for left, right in intervals
+            for inner_left, inner_right in intervals
+        )
+    )
+''',
+"weighted-schedule-witness": r'''
+from itertools import combinations
+
+
+def solve():
+    count = int(input())
+    jobs = [tuple(map(int, input().split())) for _ in range(count)]
+    best = (0, ())
+    for size in range(count + 1):
+        for selected in combinations(range(count), size):
+            if all(
+                jobs[left][1] <= jobs[right][0] or jobs[right][1] <= jobs[left][0]
+                for left, right in combinations(selected, 2)
+            ):
+                candidate = sum(jobs[index][2] for index in selected), selected
+                if (
+                    candidate[0] > best[0]
+                    or candidate[0] == best[0]
+                    and candidate[1] < best[1]
+                ):
+                    best = candidate
+    print(f"{best[0]} | {' '.join(map(str, best[1]))}")
+''',
+"cleanup-room-count": r'''
+def solve():
+    events = []
+    for _ in range(int(input())):
+        start, end, cleanup = map(int, input().split())
+        events.extend(((start, 1), (end + cleanup, -1)))
+    active = best = 0
+    for _, change in sorted(events, key=lambda event: (event[0], event[1])):
+        active += change
+        best = max(best, active)
+    print(best)
+''',
+"strict-nested-chain": r'''
+def solve():
+    count = int(input())
+    intervals = sorted(
+        (tuple(map(int, input().split())) for _ in range(count)),
+        key=lambda interval: (interval[0], -interval[1]),
+    )
+    longest = [1] * count
+    for index, (left, right) in enumerate(intervals):
+        longest[index] = 1 + max(
+            (
+                longest[previous]
+                for previous in range(index)
+                if intervals[previous][0] < left and right < intervals[previous][1]
+            ),
+            default=0,
+        )
+    print(max(longest, default=0))
+''',
+"union-intersection-length": r'''
+def merge(intervals):
+    merged = []
+    for left, right in sorted(intervals):
+        if merged and left <= merged[-1][1]:
+            merged[-1] = merged[-1][0], max(merged[-1][1], right)
+        else:
+            merged.append((left, right))
+    return merged
+
+
+def solve():
+    first_count, second_count = map(int, input().split())
+    first = merge([tuple(map(int, input().split())) for _ in range(first_count)])
+    second = merge([tuple(map(int, input().split())) for _ in range(second_count)])
+    left = right = total = 0
+    while left < len(first) and right < len(second):
+        total += max(
+            0,
+            min(first[left][1], second[right][1])
+            - max(first[left][0], second[right][0]),
+        )
+        if first[left][1] < second[right][1]:
+            left += 1
+        else:
+            right += 1
+    print(total)
+''',
+"minimum-target-cover": r'''
+def solve():
+    count, start, end = map(int, input().split())
+    intervals = sorted(tuple(map(int, input().split())) for _ in range(count))
+    current = start
+    index = used = 0
+    while current < end:
+        farthest = current
+        while index < count and intervals[index][0] <= current:
+            farthest = max(farthest, intervals[index][1])
+            index += 1
+        if farthest == current:
+            print(-1)
+            return
+        current = farthest
+        used += 1
+    print(used)
+''',
+})
+
+for _item in PYTHON_CURATED_289_353[20:38]:
+    _item["solution"] = _direct_reference(_TASK_REFERENCE_BODIES[_item["concept_token"]])
+
+_TASK_REFERENCE_BODIES.update({
+"shell-tokenizer": r'''
+import shlex
+
+
+def solve():
+    print("|".join(shlex.split(input())))
+''',
+"parking-ledger": r'''
+def solve():
+    rate, commands = map(int, input().split())
+    active = {}
+    output = []
+    for _ in range(commands):
+        action, car, time = input().split()
+        time = int(time)
+        if action == "ENTER":
+            active[car] = time
+        elif car in active:
+            output.append(f"{car} {(time - active.pop(car)) * rate}")
+    print("\n".join(output + ["ACTIVE " + " ".join(sorted(active))]))
+''',
+"tournament-scoreboard": r'''
+from collections import defaultdict
+
+
+def solve():
+    scores = defaultdict(int)
+    for _ in range(int(input())):
+        result = input().split()
+        if result[0] == "WIN":
+            scores[result[1]] += 3
+        else:
+            scores[result[1]] += 1
+            scores[result[2]] += 1
+    print(
+        *[
+            f"{name}:{score}"
+            for name, score in sorted(
+                scores.items(), key=lambda item: (-item[1], item[0])
+            )
+        ]
+    )
+''',
+"undo-redo-buffer": r'''
+def solve():
+    text = ""
+    undo = []
+    redo = []
+    for _ in range(int(input())):
+        parts = input().split(" ", 1)
+        command = parts[0]
+        if command == "APPEND":
+            undo.append(text)
+            text += parts[1]
+            redo.clear()
+        elif command == "DELETE":
+            undo.append(text)
+            text = text[: -int(parts[1])]
+            redo.clear()
+        elif command == "UNDO" and undo:
+            redo.append(text)
+            text = undo.pop()
+        elif command == "REDO" and redo:
+            undo.append(text)
+            text = redo.pop()
+    print(text)
+''',
+"packet-reassembly": r'''
+def solve():
+    total, received = map(int, input().split())
+    packets = {}
+    for _ in range(received):
+        index, payload = input().split(" ", 1)
+        packets.setdefault(int(index), payload)
+    missing = [str(index) for index in range(total) if index not in packets]
+    print(
+        "MISSING " + " ".join(missing)
+        if missing
+        else "".join(packets[index] for index in range(total))
+    )
+''',
+"warehouse-push": r'''
+def solve():
+    rows, cols = map(int, input().split())
+    grid = [input().strip() for _ in range(rows)]
+    commands = input().strip()
+    moves = {"U": (-1, 0), "D": (1, 0), "L": (0, -1), "R": (0, 1)}
+    robot = next(
+        (row, col)
+        for row in range(rows)
+        for col in range(cols)
+        if grid[row][col] == "@"
+    )
+    box = next(
+        (row, col)
+        for row in range(rows)
+        for col in range(cols)
+        if grid[row][col] == "B"
+    )
+    for command in commands:
+        dr, dc = moves[command]
+        next_robot = robot[0] + dr, robot[1] + dc
+        if (
+            not (0 <= next_robot[0] < rows and 0 <= next_robot[1] < cols)
+            or grid[next_robot[0]][next_robot[1]] == "#"
+        ):
+            continue
+        if next_robot == box:
+            next_box = box[0] + dr, box[1] + dc
+            if (
+                not (0 <= next_box[0] < rows and 0 <= next_box[1] < cols)
+                or grid[next_box[0]][next_box[1]] == "#"
+            ):
+                continue
+            box = next_box
+        robot = next_robot
+    print(f"{robot[0]} {robot[1]} | {box[0]} {box[1]}")
+''',
+"round-robin-completion": r'''
+from collections import deque
+
+
+def solve():
+    count, quantum = map(int, input().split())
+    jobs = sorted(
+        (tuple(map(int, input().split())) + (index,) for index in range(count)),
+        key=lambda job: (job[0], job[2]),
+    )
+    ready = deque()
+    finished = [0] * count
+    time = index = 0
+    while index < count or ready:
+        if not ready:
+            time = max(time, jobs[index][0])
+        while index < count and jobs[index][0] <= time:
+            ready.append(jobs[index])
+            index += 1
+        arrived, remaining, job_id = ready.popleft()
+        runtime = min(quantum, remaining)
+        time += runtime
+        remaining -= runtime
+        while index < count and jobs[index][0] <= time:
+            ready.append(jobs[index])
+            index += 1
+        if remaining:
+            ready.append((arrived, remaining, job_id))
+        else:
+            finished[job_id] = time
+    print(*finished)
+''',
+"rail-permutation": r'''
+def solve():
+    cars, queries = map(int, input().split())
+    answer = []
+    for _ in range(queries):
+        stack = []
+        next_car = 1
+        for wanted in map(int, input().split()):
+            while next_car <= cars and next_car != wanted:
+                stack.append(next_car)
+                next_car += 1
+            if next_car == wanted:
+                next_car += 1
+            elif stack and stack[-1] == wanted:
+                stack.pop()
+            else:
+                answer.append("NO")
+                break
+        else:
+            answer.append("YES")
+    print(*answer)
+''',
+"subarray-median-k": r'''
+def solve():
+    count = int(input())
+    values = list(map(int, input().split()))
+    target = int(input())
+    total = 0
+    for start in range(count):
+        for end in range(start + 1, count + 1):
+            if sorted(values[start:end])[(end - start - 1) // 2] == target:
+                total += 1
+    print(total)
+''',
+"shortest-at-least-k": r'''
+from collections import deque
+
+
+def solve():
+    count = int(input())
+    values = list(map(int, input().split()))
+    target = int(input())
+    prefix = [0]
+    for value in values:
+        prefix.append(prefix[-1] + value)
+    candidates = deque()
+    best = count + 1
+    for index, value in enumerate(prefix):
+        while candidates and value - prefix[candidates[0]] >= target:
+            best = min(best, index - candidates.popleft())
+        while candidates and prefix[candidates[-1]] >= value:
+            candidates.pop()
+        candidates.append(index)
+    print(best if best <= count else -1)
+''',
+"one-deletion-max-sum": r'''
+def solve():
+    count = int(input())
+    values = list(map(int, input().split()))
+    keep = drop = best = values[0]
+    for value in values[1:]:
+        drop, keep = max(keep, drop + value), max(value, keep + value)
+        best = max(best, keep, drop)
+    print(best)
+''',
+"reverse-pair-count": r'''
+def solve():
+    count = int(input())
+    values = list(map(int, input().split()))
+    print(
+        sum(
+            values[left] > 2 * values[right]
+            for left in range(count)
+            for right in range(left + 1, count)
+        )
+    )
+''',
+"next-permutation": r'''
+def solve():
+    count = int(input())
+    values = list(map(int, input().split()))
+    pivot = count - 2
+    while pivot >= 0 and values[pivot] >= values[pivot + 1]:
+        pivot -= 1
+    if pivot < 0:
+        print("NONE")
+        return
+    swap = count - 1
+    while values[swap] <= values[pivot]:
+        swap -= 1
+    values[pivot], values[swap] = values[swap], values[pivot]
+    values[pivot + 1 :] = reversed(values[pivot + 1 :])
+    print(*values)
+''',
+"pancake-flips": r'''
+def solve():
+    count = int(input())
+    values = list(map(int, input().split()))
+    flips = []
+    for end in range(count - 1, 0, -1):
+        maximum = max(range(end + 1), key=values.__getitem__)
+        if maximum != end:
+            if maximum:
+                flips.append(maximum + 1)
+                values[: maximum + 1] = reversed(values[: maximum + 1])
+            flips.append(end + 1)
+            values[: end + 1] = reversed(values[: end + 1])
+    print(*flips) if flips else print("-")
+''',
+"circular-one-grouping": r'''
+def solve():
+    count = int(input())
+    values = list(map(int, input().split()))
+    ones = sum(values)
+    if ones <= 1:
+        print(0)
+        return
+    doubled = values * 2
+    zeroes = sum(value == 0 for value in doubled[:ones])
+    best = zeroes
+    for end in range(ones, len(doubled)):
+        zeroes += (doubled[end] == 0) - (doubled[end - ones] == 0)
+        best = min(best, zeroes)
+    print(best)
+''',
+"exactly-k-distinct": r'''
+from collections import Counter
+
+
+def at_most(values, limit):
+    counts = Counter()
+    left = total = 0
+    for right, value in enumerate(values):
+        counts[value] += 1
+        while len(counts) > limit:
+            counts[values[left]] -= 1
+            if counts[values[left]] == 0:
+                del counts[values[left]]
+            left += 1
+        total += right - left + 1
+    return total
+
+
+def solve():
+    count = int(input())
+    values = list(map(int, input().split()))
+    target = int(input())
+    print(at_most(values, target) - at_most(values, target - 1))
+''',
+"bounded-range-longest": r'''
+from collections import deque
+
+
+def solve():
+    count = int(input())
+    values = list(map(int, input().split()))
+    limit = int(input())
+    low = deque()
+    high = deque()
+    left = best = 0
+    for right, value in enumerate(values):
+        while low and values[low[-1]] > value:
+            low.pop()
+        while high and values[high[-1]] < value:
+            high.pop()
+        low.append(right)
+        high.append(right)
+        while values[high[0]] - values[low[0]] > limit:
+            left += 1
+            if low[0] < left:
+                low.popleft()
+            if high[0] < left:
+                high.popleft()
+        best = max(best, right - left + 1)
+    print(best)
+''',
+"online-lower-medians": r'''
+from bisect import insort
+
+
+def solve():
+    count = int(input())
+    values = list(map(int, input().split()))
+    seen = []
+    medians = []
+    for value in values:
+        insort(seen, value)
+        medians.append(seen[(len(seen) - 1) // 2])
+    print(*medians)
+''',
+"k-closest-sorted": r'''
+def solve():
+    count = int(input())
+    values = list(map(int, input().split()))
+    amount, target = map(int, input().split())
+    print(
+        *sorted(sorted(values, key=lambda value: (abs(value - target), value))[:amount])
+    )
+''',
+})
+
+for _item in PYTHON_CURATED_289_353[38:57]:
+    _item["solution"] = _direct_reference(_TASK_REFERENCE_BODIES[_item["concept_token"]])

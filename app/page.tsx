@@ -94,6 +94,26 @@ type RunnerResult = {
   execution_engine?: string;
   executed_engine?: string;
 };
+type AcceptedSubmissionSnapshot = {
+  exerciseId: string;
+  language: PracticeLanguage;
+  sqlDialect: SqlDialect;
+  code: string;
+};
+type ReferenceSolution = {
+  exerciseId: string;
+  language: PracticeLanguage;
+  solution: string;
+  expectedComplexity: string;
+  lineCount: number;
+  reviewPolicyId: string;
+  selectionBasis: string;
+  readabilityFocused: boolean;
+  readabilityNote: string;
+  referenceDialect?: string;
+  dialectNote?: string;
+  complexityNote?: string;
+};
 type TraceStep = {
   line: number;
   locals: Record<string, string>;
@@ -548,6 +568,8 @@ const coachWelcome: CoachMessage = {
   role: "coach",
   text: "Ask me naturally about your approach, an error, complexity, or what to try next. I’ll adapt to what you need.",
 };
+const coachBrowserTimeoutMs = 70_000;
+const coachRestartDelayMs = 900;
 
 function coachConsentIdentity(status: AiStatus) {
   return status.provider === "local_llm"
@@ -1130,6 +1152,15 @@ export default function Home() {
   const [status, setStatus] = useState("Choose a drill to begin");
   const [elapsed, setElapsed] = useState(0);
   const [runResult, setRunResult] = useState<RunnerResult | null>(null);
+  const [acceptedSubmission, setAcceptedSubmission] =
+    useState<AcceptedSubmissionSnapshot | null>(null);
+  const [referenceSolution, setReferenceSolution] =
+    useState<ReferenceSolution | null>(null);
+  const [referenceSolutionVisible, setReferenceSolutionVisible] =
+    useState(false);
+  const [referenceSolutionLoading, setReferenceSolutionLoading] =
+    useState(false);
+  const [referenceSolutionError, setReferenceSolutionError] = useState("");
   const [traceSteps, setTraceSteps] = useState<TraceStep[]>([]);
   const [traceIndex, setTraceIndex] = useState(0);
   const [workflowBusy, setWorkflowBusy] = useState(false);
@@ -1162,6 +1193,9 @@ export default function Home() {
   const [, setPendingCoachQuestion] = useState("");
   const [pendingCoachProvider, setPendingCoachProvider] = useState("");
   const [coachBusy, setCoachBusy] = useState(false);
+  const [coachRestarting, setCoachRestarting] = useState(false);
+  const [activeCoachIntent, setActiveCoachIntent] =
+    useState<CoachIntent | null>(null);
   const [aiStatus, setAiStatus] = useState<AiStatus>({});
   const [coachInput, setCoachInput] = useState("");
   const [retryCoachSnapshot, setRetryCoachSnapshot] =
@@ -1226,6 +1260,10 @@ export default function Home() {
   const coachStreamTextRef = useRef("");
   const coachStreamFrameRef = useRef<number | null>(null);
   const coachStreamingMessageRef = useRef<string | null>(null);
+  const coachActiveSnapshotRef = useRef<CoachRequestSnapshot | null>(null);
+  const coachRestartTimerRef = useRef<number | null>(null);
+  const referenceSolutionGenerationRef = useRef(0);
+  const referenceSolutionAbortRef = useRef<AbortController | null>(null);
   const consentFocusTargetRef = useRef<"editor" | "coach" | null>(null);
   const hintSequenceRef = useRef(0);
   const messageSequenceRef = useRef(0);
@@ -1476,14 +1514,21 @@ export default function Home() {
     const identity = currentCoachRuntimeIdentity;
     if (coachIdentityRef.current === identity) return;
     coachIdentityRef.current = identity;
+    if (coachRestartTimerRef.current !== null) {
+      window.clearTimeout(coachRestartTimerRef.current);
+      coachRestartTimerRef.current = null;
+    }
     coachGenerationRef.current += 1;
     coachAbortRef.current?.abort();
     coachAbortRef.current = null;
     coachBusyRef.current = false;
     coachActiveIntentRef.current = null;
+    coachActiveSnapshotRef.current = null;
     coachSubmitRef.current = false;
     pendingCoachSnapshotRef.current = null;
     setCoachBusy(false);
+    setCoachRestarting(false);
+    setActiveCoachIntent(null);
     setCoachConsentOpen(false);
     setPendingCoachQuestion("");
     setPendingCoachProvider("");
@@ -1572,8 +1617,12 @@ export default function Home() {
   }, [flushCoachConversationToStorage]);
   useEffect(
     () => () => {
+      if (coachRestartTimerRef.current !== null)
+        window.clearTimeout(coachRestartTimerRef.current);
       coachGenerationRef.current += 1;
       coachAbortRef.current?.abort();
+      referenceSolutionGenerationRef.current += 1;
+      referenceSolutionAbortRef.current?.abort();
     },
     [],
   );
@@ -1680,11 +1729,16 @@ export default function Home() {
   useEffect(() => {
     if (!selected) return;
     let cancelled = false;
+    if (coachRestartTimerRef.current !== null) {
+      window.clearTimeout(coachRestartTimerRef.current);
+      coachRestartTimerRef.current = null;
+    }
     coachGenerationRef.current += 1;
     coachAbortRef.current?.abort();
     coachAbortRef.current = null;
     coachBusyRef.current = false;
     coachActiveIntentRef.current = null;
+    coachActiveSnapshotRef.current = null;
     coachSubmitRef.current = false;
     pendingCoachSnapshotRef.current = null;
     workflowGenerationRef.current += 1;
@@ -1704,6 +1758,8 @@ export default function Home() {
         coachSubmitRef.current = false;
         pendingCoachSnapshotRef.current = null;
         setCoachBusy(false);
+        setCoachRestarting(false);
+        setActiveCoachIntent(null);
         setCoachConsentOpen(false);
         setPendingCoachQuestion("");
         setPendingCoachProvider("");
@@ -1758,6 +1814,8 @@ export default function Home() {
         coachSubmitRef.current = false;
         pendingCoachSnapshotRef.current = null;
         setCoachBusy(false);
+        setCoachRestarting(false);
+        setActiveCoachIntent(null);
         setCoachConsentOpen(false);
         setPendingCoachQuestion("");
         setPendingCoachProvider("");
@@ -2167,6 +2225,24 @@ export default function Home() {
       selected &&
       draftExerciseId === selected,
   );
+  const referenceAnswerUnlocked = Boolean(
+    acceptedSubmission?.exerciseId === selected &&
+      acceptedSubmission.language === selectedLanguage &&
+      acceptedSubmission.code === code &&
+      (selectedLanguage !== "sql" ||
+        acceptedSubmission.sqlDialect === sqlDialect),
+  );
+  const streamingCoachMessageId = coachBusy
+    ? messages.reduce<string | null>(
+        (latest, message) =>
+          message.role === "coach" &&
+          !message.contextual &&
+          !message.text
+            ? message.id
+            : latest,
+        null,
+      )
+    : null;
   const setupProviderConfigured =
     setupProvider === "openai"
       ? Boolean(aiStatus.openai_configured)
@@ -2247,32 +2323,88 @@ export default function Home() {
       flushStreamingCoachMessage(id);
     });
   }
-  function stopCoachResponse() {
-    if (!coachBusyRef.current) return;
+  function clearScheduledCoachRestart() {
+    if (coachRestartTimerRef.current !== null) {
+      window.clearTimeout(coachRestartTimerRef.current);
+      coachRestartTimerRef.current = null;
+    }
+    setCoachRestarting(false);
+  }
+  function settleStreamingCoachMessage(note: string) {
+    const id = coachStreamingMessageRef.current;
+    if (!id) return false;
+    const partial = coachStreamTextRef.current.trim();
+    coachStreamTextRef.current = partial
+      ? `${partial}\n\n*${note}*`
+      : `*${note}*`;
+    flushStreamingCoachMessage(id);
+    coachStreamingMessageRef.current = null;
+    return true;
+  }
+  function interruptActiveCoach(
+    note: string,
+    notice: string,
+    retryable: boolean,
+  ) {
+    if (!coachBusyRef.current) return null;
+    const snapshot = coachActiveSnapshotRef.current;
     coachGenerationRef.current += 1;
     coachAbortRef.current?.abort();
     coachAbortRef.current = null;
     coachBusyRef.current = false;
     coachSubmitRef.current = false;
+    coachActiveIntentRef.current = null;
+    coachActiveSnapshotRef.current = null;
     setCoachBusy(false);
-    const id = coachStreamingMessageRef.current;
-    if (id) {
-      const partial = coachStreamTextRef.current.trim();
-      coachStreamTextRef.current = partial ? `${partial}\n\n*Stopped.*` : "*Stopped.*";
-      flushStreamingCoachMessage(id);
-      coachStreamingMessageRef.current = null;
-    } else {
-      setHintNotice("Coach request stopped.");
+    setActiveCoachIntent(null);
+    const settled = settleStreamingCoachMessage(note);
+    if (coachStreamFrameRef.current !== null) {
+      window.cancelAnimationFrame(coachStreamFrameRef.current);
+      coachStreamFrameRef.current = null;
     }
+    if (
+      !settled &&
+      snapshot &&
+      (snapshot.intent === "adaptive" || snapshot.intent === "edit")
+    ) {
+      appendCoachMessage({
+        id: `message-${++messageSequenceRef.current}`,
+        role: "coach",
+        text: note,
+        contextual: false,
+      });
+    }
+    const savedRetry =
+      retryable &&
+      snapshot?.intent === "adaptive" &&
+      coachSnapshotIsCurrent(snapshot)
+        ? snapshot
+        : null;
+    setRetryCoachSnapshot(savedRetry);
+    setHintNotice(notice);
+    return savedRetry;
+  }
+  function stopCoachResponse() {
+    interruptActiveCoach(
+      "Response stopped. Choose Try again to restart it.",
+      "Coach response stopped · Try again is ready.",
+      true,
+    );
   }
   function cancelCoachWork(
     resetConversation = false,
     discardVisibleHint = false,
   ) {
+    clearScheduledCoachRestart();
     coachGenerationRef.current += 1;
     coachAbortRef.current?.abort();
     coachAbortRef.current = null;
+    if (!resetConversation)
+      settleStreamingCoachMessage(
+        "Response stopped because the workspace changed.",
+      );
     coachStreamingMessageRef.current = null;
+    coachActiveSnapshotRef.current = null;
     coachActiveIntentRef.current = null;
     if (coachStreamFrameRef.current !== null) {
       window.cancelAnimationFrame(coachStreamFrameRef.current);
@@ -2283,6 +2415,7 @@ export default function Home() {
     pendingCoachSnapshotRef.current = null;
     setRetryCoachSnapshot(null);
     setCoachBusy(false);
+    setActiveCoachIntent(null);
     setCoachConsentOpen(false);
     setPendingCoachQuestion("");
     setPendingCoachProvider("");
@@ -2309,6 +2442,8 @@ export default function Home() {
       setPendingEditorEdit(null);
       setEditorEdit(null);
     }
+    if (acceptedSubmission && acceptedSubmission.code !== nextCode)
+      clearReferenceSolutionState();
     setCode(nextCode);
   }
   function undoEditorEdit() {
@@ -2366,6 +2501,16 @@ export default function Home() {
     editor.revealLinesInCenterIfOutsideViewport(edit.startLine, edit.endLine);
     editor.focus();
   }
+  function clearReferenceSolutionState() {
+    referenceSolutionGenerationRef.current += 1;
+    referenceSolutionAbortRef.current?.abort();
+    referenceSolutionAbortRef.current = null;
+    setAcceptedSubmission(null);
+    setReferenceSolution(null);
+    setReferenceSolutionVisible(false);
+    setReferenceSolutionLoading(false);
+    setReferenceSolutionError("");
+  }
   function choosePythonPracticeSection(section: PythonPracticeSection) {
     if (section === pythonPracticeSection) {
       setProblemDrawerOpen(false);
@@ -2379,6 +2524,7 @@ export default function Home() {
     setWorkflowBusy(false);
     setCelebration(null);
     setRunResult(null);
+    clearReferenceSolutionState();
     setTraceSteps([]);
     setTraceIndex(0);
     setStatus(
@@ -2423,6 +2569,7 @@ export default function Home() {
     setWorkflowBusy(false);
     setCelebration(null);
     setRunResult(null);
+    clearReferenceSolutionState();
     setTraceSteps([]);
     setTraceIndex(0);
     setStatus("Loading drill…");
@@ -2443,6 +2590,7 @@ export default function Home() {
     setWorkflowBusy(false);
     setCelebration(null);
     setRunResult(null);
+    clearReferenceSolutionState();
     setTraceSteps([]);
     setTraceIndex(0);
     setQuery("");
@@ -2451,6 +2599,15 @@ export default function Home() {
     setStatus(`Loading ${languageMeta(language).label} drills…`);
     setSelected("");
     setSelectedLanguage(language);
+  }
+  function selectSqlDialect(dialect: SqlDialect) {
+    if (dialect === sqlDialect) return;
+    clearReferenceSolutionState();
+    setRunResult(null);
+    setTraceSteps([]);
+    setTraceIndex(0);
+    setSqlDialect(dialect);
+    setStatus(`SQL dialect changed to ${sqlDialectMeta(dialect).label}`);
   }
   function choosePracticeLevel(level: PracticeLevel) {
     setDifficulty(level);
@@ -2477,6 +2634,7 @@ export default function Home() {
     if (coachActiveIntentRef.current !== "hint") cancelCoachWork(false);
     coachDocumentRevisionRef.current += 1;
     clearEditorEdit();
+    clearReferenceSolutionState();
     const fresh = current.starter_code ?? blankCodeFor(selectedLanguage);
     try {
       clearPersistedDraft(localStorage, selectedLanguage, selected);
@@ -2486,10 +2644,10 @@ export default function Home() {
     setCode(fresh);
     setStatus("Starter code restored");
   }
-  function startWorkflow() {
+  function startWorkflow(clearAcceptedSubmission = false) {
     if (!selected || workflowBusyRef.current) return null;
     resetMascotIdleRef.current();
-    cancelCoachWork(false);
+    if (clearAcceptedSubmission) clearReferenceSolutionState();
     workflowBusyRef.current = true;
     const generation = workflowGenerationRef.current + 1;
     workflowGenerationRef.current = generation;
@@ -2730,7 +2888,7 @@ export default function Home() {
     resetMascotIdleRef.current();
   }
   async function submitCode() {
-    const workflow = startWorkflow();
+    const workflow = startWorkflow(true);
     if (!workflow) return;
     setStatus("Submitting…");
     try {
@@ -2750,6 +2908,12 @@ export default function Home() {
       setTab("Tests");
       const accepted = acceptedResult(result);
       if (accepted) {
+        setAcceptedSubmission({
+          exerciseId: workflow.exerciseId,
+          language: workflow.language,
+          sqlDialect: workflow.dialect ?? "sqlite",
+          code,
+        });
         setProblems((all) =>
           all.map((item) =>
             item.id === workflow.exerciseId ? { ...item, solved: true } : item,
@@ -2781,6 +2945,107 @@ export default function Home() {
       if (workflowIsCurrent(workflow)) {
         workflowBusyRef.current = false;
         setWorkflowBusy(false);
+      }
+    }
+  }
+  async function revealReferenceSolution() {
+    const snapshot = acceptedSubmission;
+    if (
+      !snapshot ||
+      referenceSolutionLoading ||
+      snapshot.exerciseId !== selectedRef.current
+    )
+      return;
+    const generation = referenceSolutionGenerationRef.current + 1;
+    referenceSolutionGenerationRef.current = generation;
+    const controller = new AbortController();
+    referenceSolutionAbortRef.current?.abort();
+    referenceSolutionAbortRef.current = controller;
+    setReferenceSolutionLoading(true);
+    setReferenceSolutionError("");
+    try {
+      const response = await fetch(
+        `/api/exercises/${encodeURIComponent(snapshot.exerciseId)}/reference-solution`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            code: snapshot.code,
+            language: snapshot.language,
+            sql_dialect: snapshot.sqlDialect,
+          }),
+        },
+      );
+      const payload = (await response.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >;
+      if (
+        controller.signal.aborted ||
+        generation !== referenceSolutionGenerationRef.current ||
+        snapshot.exerciseId !== selectedRef.current
+      )
+        return;
+      if (!response.ok)
+        throw new Error(
+          typeof payload.detail === "string"
+            ? payload.detail
+            : "The reference answer is unavailable right now.",
+        );
+      const language = payload.language;
+      if (
+        typeof payload.solution !== "string" ||
+        !payload.solution.trim() ||
+        payload.review_policy_id !== "kitcode-reference-best-v1" ||
+        (language !== "python" && language !== "java" && language !== "sql") ||
+        language !== snapshot.language ||
+        payload.exercise_id !== snapshot.exerciseId
+      )
+        throw new Error("The reference answer could not be displayed safely.");
+      setReferenceSolution({
+        exerciseId: snapshot.exerciseId,
+        language,
+        solution: payload.solution,
+        expectedComplexity: String(
+          payload.expected_complexity ?? "Not specified",
+        ),
+        lineCount:
+          typeof payload.line_count === "number" ? payload.line_count : 0,
+        reviewPolicyId: payload.review_policy_id,
+        selectionBasis: String(payload.selection_basis ?? ""),
+        readabilityFocused: payload.readability_focused === true,
+        readabilityNote: String(payload.readability_note ?? ""),
+        referenceDialect:
+          typeof payload.reference_dialect === "string"
+            ? payload.reference_dialect
+            : undefined,
+        dialectNote:
+          typeof payload.dialect_note === "string"
+            ? payload.dialect_note
+            : undefined,
+        complexityNote:
+          typeof payload.complexity_note === "string"
+            ? payload.complexity_note
+            : undefined,
+      });
+      setReferenceSolutionVisible(true);
+    } catch (error) {
+      if (
+        controller.signal.aborted ||
+        generation !== referenceSolutionGenerationRef.current
+      )
+        return;
+      setReferenceSolutionError(
+        error instanceof Error
+          ? error.message
+          : "The reference answer is unavailable right now.",
+      );
+    } finally {
+      if (generation === referenceSolutionGenerationRef.current) {
+        if (referenceSolutionAbortRef.current === controller)
+          referenceSolutionAbortRef.current = null;
+        setReferenceSolutionLoading(false);
       }
     }
   }
@@ -3111,6 +3376,8 @@ export default function Home() {
     resetMascotIdleRef.current();
     coachBusyRef.current = true;
     coachActiveIntentRef.current = snapshot.intent;
+    coachActiveSnapshotRef.current = snapshot;
+    setActiveCoachIntent(snapshot.intent);
     coachSubmitRef.current = true;
     if (snapshot.intent === "adaptive") setRetryCoachSnapshot(null);
     setCoachBusy(true);
@@ -3120,6 +3387,18 @@ export default function Home() {
     coachAbortRef.current?.abort();
     coachAbortRef.current = controller;
     let streamedMessageId: string | null = null;
+    const browserTimeout = window.setTimeout(() => {
+      if (
+        generation !== coachGenerationRef.current ||
+        controller.signal.aborted
+      )
+        return;
+      interruptActiveCoach(
+        "The coach took too long to finish. Choose Try again to restart the same question.",
+        "Coach timed out · Try again is ready.",
+        true,
+      );
+    }, coachBrowserTimeoutMs);
     if (
       (snapshot.intent === "adaptive" || snapshot.intent === "edit") &&
       !snapshot.retry
@@ -3336,12 +3615,15 @@ export default function Home() {
           "The hint service is unavailable. Your code was not changed.",
         );
     } finally {
+      window.clearTimeout(browserTimeout);
       if (generation === coachGenerationRef.current) {
         if (coachAbortRef.current === controller) coachAbortRef.current = null;
         coachBusyRef.current = false;
         coachActiveIntentRef.current = null;
+        coachActiveSnapshotRef.current = null;
         coachSubmitRef.current = false;
         setCoachBusy(false);
+        setActiveCoachIntent(null);
       }
     }
   }
@@ -3682,11 +3964,57 @@ export default function Home() {
     );
     dispatchCoachAction(snapshot);
   }
+  function restartCoachResponse() {
+    const snapshot = coachActiveSnapshotRef.current;
+    if (
+      !snapshot ||
+      snapshot.intent !== "adaptive" ||
+      !coachReady ||
+      !coachSnapshotIsCurrent(snapshot)
+    ) {
+      stopCoachResponse();
+      return;
+    }
+    const retry = interruptActiveCoach(
+      "Response interrupted so it could be restarted.",
+      "Restarting the same question…",
+      true,
+    );
+    if (!retry) return;
+    setCoachRestarting(true);
+    coachSubmitRef.current = true;
+    coachRestartTimerRef.current = window.setTimeout(() => {
+      coachRestartTimerRef.current = null;
+      setCoachRestarting(false);
+      coachSubmitRef.current = false;
+      if (
+        !aiStatusRef.current.configured ||
+        !coachSnapshotIsCurrent(retry)
+      ) {
+        setRetryCoachSnapshot(null);
+        setHintNotice(
+          "The drill, code, or AI provider changed. Please ask again.",
+        );
+        return;
+      }
+      coachSubmitRef.current = true;
+      dispatchCoachAction({ ...retry, retry: true });
+    }, coachRestartDelayMs);
+  }
+  function cancelCoachRestart() {
+    if (coachRestartTimerRef.current === null) return;
+    window.clearTimeout(coachRestartTimerRef.current);
+    coachRestartTimerRef.current = null;
+    coachSubmitRef.current = false;
+    setCoachRestarting(false);
+    setHintNotice("Coach restart cancelled · Try again when you are ready.");
+  }
   function retryCoachQuestion() {
     const snapshot = retryCoachSnapshot;
     if (
       !snapshot ||
       coachBusyRef.current ||
+      coachRestarting ||
       !coachReady ||
       !coachSnapshotIsCurrent(snapshot)
     ) {
@@ -4445,7 +4773,7 @@ export default function Home() {
                     <select
                       value={sqlDialect}
                       onChange={(event) =>
-                        setSqlDialect(event.target.value as SqlDialect)
+                        selectSqlDialect(event.target.value as SqlDialect)
                       }
                       aria-label="SQL dialect"
                     >
@@ -4775,6 +5103,121 @@ export default function Home() {
                       </p>
                     </div>
                   )}
+                  {referenceAnswerUnlocked && (
+                    <section
+                      className="reference-answer"
+                      aria-labelledby="reference-answer-title"
+                      aria-busy={referenceSolutionLoading}
+                    >
+                      <div className="reference-answer-heading">
+                        <div>
+                          <h3 id="reference-answer-title">
+                            Compare with the expected approach
+                          </h3>
+                          <p>
+                            Best means target Big-O time and space first, then
+                            the fewest clear lines. Readability wins when the
+                            task emphasizes human-facing code.
+                          </p>
+                        </div>
+                        {current.source !== "ai_generated" && (
+                          <button
+                            type="button"
+                            aria-controls="reference-answer-details"
+                            aria-expanded={
+                              Boolean(referenceSolution) &&
+                              referenceSolutionVisible
+                            }
+                            onClick={() => {
+                              if (referenceSolution)
+                                setReferenceSolutionVisible((visible) =>
+                                  !visible,
+                                );
+                              else void revealReferenceSolution();
+                            }}
+                            disabled={referenceSolutionLoading}
+                          >
+                            {referenceSolutionLoading
+                              ? "Checking your accepted answer…"
+                              : referenceSolution
+                                ? referenceSolutionVisible
+                                  ? "Hide best answer"
+                                  : "Show best answer"
+                                : referenceSolutionError
+                                  ? "Try again"
+                                  : "View best answer"}
+                          </button>
+                        )}
+                      </div>
+                      {current.source === "ai_generated" ? (
+                        <p className="reference-answer-unavailable">
+                          This is a provisional AI-created drill, so it does
+                          not have a vetted reference answer.
+                        </p>
+                      ) : referenceSolution?.exerciseId === selected &&
+                        referenceSolutionVisible ? (
+                        <div
+                          className="reference-answer-details"
+                          id="reference-answer-details"
+                        >
+                          <h4>Expected best answer</h4>
+                          <div className="reference-answer-metrics">
+                            <span>
+                              Reviewed rubric
+                              <strong title={referenceSolution.reviewPolicyId}>
+                                Time · space · clear lines
+                              </strong>
+                            </span>
+                            <span>
+                              Target
+                              <strong>
+                                {referenceSolution.expectedComplexity}
+                              </strong>
+                            </span>
+                            {referenceSolution.lineCount > 0 && (
+                              <span>
+                                Full reference
+                                <strong>
+                                  {referenceSolution.lineCount} non-blank lines
+                                </strong>
+                              </span>
+                            )}
+                            {referenceSolution.referenceDialect && (
+                              <span>
+                                Reference dialect
+                                <strong>
+                                  {referenceSolution.referenceDialect}
+                                </strong>
+                              </span>
+                            )}
+                            {referenceSolution.readabilityFocused && (
+                              <span>
+                                Priority
+                                <strong>Readable API and structure</strong>
+                              </span>
+                            )}
+                          </div>
+                          <pre aria-label="Best reference solution">
+                            <code>{referenceSolution.solution}</code>
+                          </pre>
+                          <p>{referenceSolution.selectionBasis}</p>
+                          <p>{referenceSolution.readabilityNote}</p>
+                          {referenceSolution.complexityNote && (
+                            <p>{referenceSolution.complexityNote}</p>
+                          )}
+                          {referenceSolution.dialectNote && (
+                            <p>{referenceSolution.dialectNote}</p>
+                          )}
+                        </div>
+                      ) : null}
+                      {referenceSolutionError &&
+                        current.source !== "ai_generated" && (
+                          <p className="reference-answer-error" role="alert">
+                            {referenceSolutionError}
+                          </p>
+                        )}
+                    </section>
+                  )}
                 </div>
               )}
               {tab === "Trace" && (
@@ -4890,7 +5333,7 @@ export default function Home() {
           <button
             type="button"
             onClick={requestHint}
-            disabled={!coachReady || coachBusy}
+            disabled={!coachReady || coachBusy || coachRestarting}
           >
             {hintNotice.startsWith("Finding")
               ? "Finding a hint…"
@@ -4905,12 +5348,13 @@ export default function Home() {
               onClick={retryCoachQuestion}
               disabled={
                 coachBusy ||
+                coachRestarting ||
                 !coachReady
               }
-              aria-label="Regenerate the last failed coach response"
+              aria-label="Try the last coach question again"
               title="Retry the same question with the same saved context"
             >
-              ↻ Regenerate
+              ↻ Try again
             </button>
           )}
         </div>
@@ -4939,19 +5383,32 @@ export default function Home() {
           aria-relevant="additions text"
           aria-label="Coach conversation"
         >
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`message ${message.role}${message.role === "coach" && !message.contextual && !message.text ? " streaming" : ""}`}
-            >
-              <span>{message.role === "coach" ? "✦" : "You"}</span>
-              {message.role === "coach" ? (
-                message.text ? <CoachReply text={message.text} /> : <p>Thinking…</p>
-              ) : (
-                <p>{message.text}</p>
-              )}
-            </div>
-          ))}
+          {messages.map((message) => {
+            const streaming = Boolean(
+              coachBusy &&
+                message.role === "coach" &&
+                !message.contextual &&
+                !message.text &&
+                message.id === streamingCoachMessageId,
+            );
+            return (
+              <div
+                key={message.id}
+                className={`message ${message.role}${streaming ? " streaming" : ""}`}
+              >
+                <span>{message.role === "coach" ? "✦" : "You"}</span>
+                {message.role === "coach" ? (
+                  message.text ? (
+                    <CoachReply text={message.text} />
+                  ) : (
+                    <p>{streaming ? "Thinking…" : "Response stopped."}</p>
+                  )
+                ) : (
+                  <p>{message.text}</p>
+                )}
+              </div>
+            );
+          })}
         </div>
         <form onSubmit={askCoach} className="coach-compose">
           <label className="sr-only" htmlFor="coach-question">
@@ -4965,12 +5422,14 @@ export default function Home() {
             placeholder="Ask about your approach…"
             rows={2}
             maxLength={4000}
-            disabled={coachBusy}
+            disabled={coachBusy || coachRestarting}
             aria-keyshortcuts="Enter"
           />
           <div>
             <span>
-              {coachBusy
+              {coachRestarting
+                ? "Restarting the same question…"
+                : coachBusy
                 ? aiStatus.provider === "codex"
                   ? "Codex is responding…"
                   : "Coach is responding…"
@@ -4981,10 +5440,26 @@ export default function Home() {
             <button
               aria-label="Send question"
               type="submit"
-              disabled={!coachReady || coachBusy || !coachInput.trim()}
+              disabled={
+                !coachReady ||
+                coachBusy ||
+                coachRestarting ||
+                !coachInput.trim()
+              }
             >
               ↑
             </button>
+            {coachBusy && activeCoachIntent === "adaptive" && (
+              <button
+                className="coach-restart-button"
+                type="button"
+                onClick={restartCoachResponse}
+                aria-label="Stop and retry the same coach question"
+                title="Stop this response and retry the same saved question"
+              >
+                Try again
+              </button>
+            )}
             {coachBusy && (
               <button
                 className="coach-cancel-button"
@@ -4993,6 +5468,16 @@ export default function Home() {
                 aria-label="Stop coach response"
               >
                 Stop
+              </button>
+            )}
+            {coachRestarting && (
+              <button
+                className="coach-cancel-button"
+                type="button"
+                onClick={cancelCoachRestart}
+                aria-label="Cancel coach restart"
+              >
+                Cancel
               </button>
             )}
           </div>

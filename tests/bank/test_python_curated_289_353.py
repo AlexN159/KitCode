@@ -82,7 +82,7 @@ def test_final_source_has_literal_fixtures_and_no_retired_generator_layers():
         'constraints', 'hints', 'expected_complexity', 'submission_mode', 'required_class',
     )} for item in PYTHON_CURATED_289_353]
     digest = hashlib.sha256(json.dumps(metadata, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-    assert digest == '0361fb2b936bd952965ce043bfbd66e098c7325c4f806bbadd3cc680e2a1a9db'
+    assert digest == '22f7cb10711aa3dcf9b31ba065724c412b1a828fe6103c67e09006e02d507137'
 
 
 def test_script_contracts_are_specific_and_cover_formatting_ties_and_edge_rules():
@@ -123,6 +123,23 @@ def test_every_script_contract_states_a_quantitative_input_bound():
     weighted = next(item for item in PYTHON_CURATED_289_353
                     if item['concept_token'] == 'weighted-schedule-witness')
     assert any('1 <= n <= 14' in constraint for constraint in weighted['constraints'])
+
+
+def test_reviewed_complexities_state_time_and_space_and_wildcards_are_deterministic():
+    by_token = {item['concept_token']: item for item in PYTHON_CURATED_289_353}
+    assert by_token['wildcard-capture']['expected_complexity'] == (
+        'O(P*T) time and O(S*T) space, where P is pattern length, T is text length, '
+        'and S is the number of stars.'
+    )
+    assert by_token['triangle-count']['expected_complexity'] == (
+        'O(n + m + sum of degree intersections) time and O(n + m) space.'
+    )
+    assert by_token['parking-ledger']['expected_complexity'] == (
+        'O(q log q) time including final sorting and O(q) space.'
+    )
+    wildcard = by_token['wildcard-capture']['solution']
+    assert 'import re' not in wildcard
+    assert 'possible = [[False]' in wildcard
 
 
 def test_repaired_medium_contract_edge_cases_have_the_documented_answers():
@@ -214,6 +231,14 @@ def test_every_reference_is_self_contained_and_handles_every_fixture():
                 result=subprocess.run([sys.executable,'-I',str(path)],input=case['input'],text=True,capture_output=True,timeout=3)
                 assert result.returncode==0, result.stderr
                 assert result.stdout.rstrip()==case['expected_output'].rstrip()
+
+
+def test_reviewed_script_references_are_direct_and_not_semicolon_packed():
+    """Best answers must remain teachable rather than gaming a line count."""
+    for item in PYTHON_CURATED_289_353[:57]:
+        solution = item['solution']
+        assert 'def answer(mode' not in solution, item['id']
+        assert ';' not in solution, item['id']
 
 def test_no_normalised_title_description_or_solution_collides_with_catalogue():
     current_ids = {item['id'] for item in PYTHON_CURATED_289_353}

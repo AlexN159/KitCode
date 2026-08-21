@@ -132,6 +132,8 @@ class ExerciseBankTests(unittest.TestCase):
         detail = get_exercise("two-sum-indices")
         self.assertIsNotNone(detail)
         self.assertNotIn("hidden_tests", detail)
+        self.assertNotIn("solution", detail)
+        self.assertNotIn("answer", detail)
         self.assertEqual(get_exercise("missing"), None)
 
     def test_array_input_copy_explains_count_values_and_target_lines(self) -> None:

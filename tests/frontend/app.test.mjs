@@ -342,7 +342,7 @@ test("coach composer sends on Enter without breaking IME or multiline input", as
   assert.match(page, /onKeyDown=\{handleCoachKeyDown\}/);
   assert.match(page, /Enter to send; Shift\+Enter for a new line/);
   assert.match(page, /coachSubmitRef/);
-  assert.match(page, /!coachReady \|\| coachBusy \|\| !coachInput\.trim\(\)/);
+  assert.match(page, /!coachReady \|\|\s+coachBusy \|\|\s+coachRestarting \|\|\s+!coachInput\.trim\(\)/);
 });
 
 test("class exercises explain that Submit checks the class API directly", async () => {
@@ -428,7 +428,7 @@ test("adaptive coach renders provider-neutral streamed replies progressively", a
   assert.match(styles, /\.message\.streaming \.coach-reply/);
   assert.match(page, /function stopCoachResponse/);
   assert.match(page, /coachAbortRef\.current\?\.abort\(\)/);
-  assert.match(page, /\*Stopped\.\*/);
+  assert.match(page, /Response stopped\. Choose Try again/);
   assert.match(page, /Stop coach response/);
   assert.match(page, /Codex is responding…/);
   assert.match(page, /Coach is responding…/);
@@ -895,7 +895,7 @@ test("Kit activates the same safe hint request as the coach quick action without
     "Kit calls the guarded shared hint action, so unavailable and busy states behave like the quick action",
   );
   const requestHintBody = page.match(
-    /function requestHint\(\) \{([\s\S]*?)\n {2}\}\n {2}function askCoach/,
+    /function requestHint\(\) \{([\s\S]*?)\n {2}\}\n {2}function restartCoachResponse/,
   )?.[1];
   assert.ok(requestHintBody, "Kit's shared hint action is defined directly in the client");
   assert.match(
@@ -910,7 +910,7 @@ test("Kit activates the same safe hint request as the coach quick action without
   );
   assert.match(
     page,
-    /<button[\s\S]*?onClick=\{requestHint\}[\s\S]*?disabled=\{!coachReady \|\| coachBusy\}/,
+    /<button[\s\S]*?onClick=\{requestHint\}[\s\S]*?disabled=\{!coachReady \|\| coachBusy \|\| coachRestarting\}/,
     "the quick-action button retains the matching public availability contract",
   );
 });
@@ -1120,8 +1120,52 @@ test("coach keeps completed hints across edits and can retry a failed chat reque
   assert.match(page, /Hint · based on an earlier draft/);
   assert.match(page, /if \(snapshot\.intent === "adaptive"\) setRetryCoachSnapshot\(snapshot\)/);
   assert.match(page, /function retryCoachQuestion\(\)[\s\S]*?dispatchCoachAction\(\{ \.\.\.snapshot, retry: true \}\)/);
-  assert.match(page, /↻ Regenerate/);
+  assert.match(page, /↻ Try again/);
   assert.match(page, /Retry the same question with the same saved context/);
+});
+
+test("coach recovers from submit, stop, and a genuinely stalled response", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/globals.css", projectRoot), "utf8"),
+  ]);
+  const workflowBody = page.slice(
+    page.indexOf("function startWorkflow"),
+    page.indexOf("function workflowIsCurrent"),
+  );
+  assert.doesNotMatch(
+    workflowBody,
+    /cancelCoachWork/,
+    "Run and Submit must not silently kill an unrelated coach response",
+  );
+  assert.match(page, /const coachBrowserTimeoutMs = 70_000/);
+  assert.match(page, /const coachActiveSnapshotRef = useRef<CoachRequestSnapshot \| null>\(null\)/);
+  assert.match(
+    page,
+    /function settleStreamingCoachMessage\([\s\S]*?flushStreamingCoachMessage\(id\)[\s\S]*?coachStreamingMessageRef\.current = null/,
+  );
+  assert.match(
+    page,
+    /function cancelCoachWork\([\s\S]*?settleStreamingCoachMessage\([\s\S]*?Response stopped because the workspace changed/,
+  );
+  assert.match(
+    page,
+    /function stopCoachResponse\(\)[\s\S]*?interruptActiveCoach\([\s\S]*?Try again is ready[\s\S]*?true/,
+  );
+  assert.match(
+    page,
+    /function restartCoachResponse\(\)[\s\S]*?interruptActiveCoach\([\s\S]*?window\.setTimeout\([\s\S]*?dispatchCoachAction\(\{ \.\.\.retry, retry: true \}\)/,
+  );
+  assert.match(
+    page,
+    /const browserTimeout = window\.setTimeout\([\s\S]*?Coach timed out · Try again is ready[\s\S]*?coachBrowserTimeoutMs/,
+  );
+  assert.match(page, /aria-label="Stop and retry the same coach question"/);
+  assert.match(
+    page,
+    /message\.id === streamingCoachMessageId[\s\S]*?streaming \? "Thinking…" : "Response stopped\."/,
+  );
+  assert.match(styles, /\.coach-compose \.coach-restart-button/);
 });
 
 test("a ready hint mounts a Monaco view zone only when inline hints are enabled", async () => {
@@ -1174,6 +1218,64 @@ test("Python practice includes an optional 100-question fundamentals quiz", asyn
   assert.match(styles, /\.practice-section-picker/);
   assert.match(styles, /\.fundamentals-workspace/);
   assert.match(styles, /\.fundamentals-option\.correct/);
+});
+
+test("an accepted current submission can reveal a reviewed best answer safely", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/globals.css", projectRoot), "utf8"),
+  ]);
+
+  assert.match(page, /type AcceptedSubmissionSnapshot = \{/);
+  assert.match(
+    page,
+    /if \(accepted\) \{[\s\S]*?setAcceptedSubmission\(\{[\s\S]*?exerciseId: workflow\.exerciseId,[\s\S]*?language: workflow\.language,[\s\S]*?sqlDialect: workflow\.dialect \?\? "sqlite",[\s\S]*?code,/,
+  );
+  assert.match(
+    page,
+    /const referenceAnswerUnlocked = Boolean\([\s\S]*?acceptedSubmission\?\.exerciseId === selected[\s\S]*?acceptedSubmission\.code === code[\s\S]*?acceptedSubmission\.sqlDialect === sqlDialect/,
+  );
+  assert.match(
+    page,
+    /function handleEditorChange\(value\?: string\)[\s\S]*?acceptedSubmission\.code !== nextCode\)[\s\S]*?clearReferenceSolutionState\(\)/,
+  );
+  assert.match(
+    page,
+    /function selectExercise\(exerciseId: string\)[\s\S]*?clearReferenceSolutionState\(\)/,
+  );
+  assert.match(
+    page,
+    /function selectSqlDialect\(dialect: SqlDialect\)[\s\S]*?clearReferenceSolutionState\(\)/,
+  );
+  assert.match(page, /function submitCode\(\)[\s\S]*?startWorkflow\(true\)/);
+  assert.match(
+    page,
+    /\/api\/exercises\/\$\{encodeURIComponent\(snapshot\.exerciseId\)\}\/reference-solution/,
+  );
+  assert.match(
+    page,
+    /body: JSON\.stringify\(\{[\s\S]*?code: snapshot\.code,[\s\S]*?language: snapshot\.language,[\s\S]*?sql_dialect: snapshot\.sqlDialect/,
+  );
+  assert.match(page, /language !== snapshot\.language/);
+  assert.match(page, /payload\.exercise_id !== snapshot\.exerciseId/);
+  assert.match(
+    page,
+    /payload\.review_policy_id !== "kitcode-reference-best-v1"/,
+  );
+  assert.match(page, /aria-labelledby="reference-answer-title"/);
+  assert.match(page, /aria-busy=\{referenceSolutionLoading\}/);
+  assert.match(page, /aria-controls="reference-answer-details"/);
+  assert.match(page, /View best answer/);
+  assert.match(page, /Hide best answer/);
+  assert.match(page, /Best means target Big-O time and space first/);
+  assert.match(page, /Time · space · clear lines/);
+  assert.match(page, /referenceSolution\.expectedComplexity/);
+  assert.match(page, /referenceSolution\.lineCount/);
+  assert.match(page, /referenceSolution\.referenceDialect/);
+  assert.match(page, /referenceSolution\.complexityNote/);
+  assert.match(page, /provisional AI-created drill/);
+  assert.match(page, /<code>\{referenceSolution\.solution\}<\/code>/);
+  assert.match(styles, /\.reference-answer/);
 });
 
 test("explicit editor-write requests are isolated, undoable, and visibly marked", async () => {

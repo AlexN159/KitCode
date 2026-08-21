@@ -6,16 +6,17 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
-from backend import main
+from backend import exercise_bank, main
 
 
 class FakeBank:
     @staticmethod
     def get_catalog():
-        return [{"id": "sample", "title": "Sample", "difficulty": "Easy", "topic": "Basics", "description": "test", "tags": ["test"], "starter_code": "def f(): pass", "hidden_tests": ["secret"]}]
+        return [{"id": "sample", "title": "Sample", "language": "python", "difficulty": "Easy", "topic": "Basics", "topics": ["basics"], "description": "test", "tags": ["test"], "starter_code": "def f(): pass", "solution": "return 1\n", "expected_complexity": "O(1) time, O(1) space", "hidden_tests": ["secret"]}]
 
     @staticmethod
     def get_exercise(exercise_id):
@@ -54,6 +55,9 @@ def test_generated_exercise_is_separate_provisional_and_submittable(tmp_path, mo
     code = "import sys\ns=sys.stdin.read().strip()\nprint(s)\nprint(s)\n"
     submitted = api.post("/api/submit", json={"exercise_id": item["id"], "code": code, "language": "python"})
     assert submitted.status_code == 200 and submitted.json()["accepted"] is True and submitted.json()["verification"] == "provisional"
+    reference = api.post(f"/api/exercises/{item['id']}/reference-solution", json={"code": code, "language": "python"})
+    assert reference.status_code == 409
+    assert "do not have a vetted reference" in reference.json()["detail"]
     assert api.delete(f"/api/generated-exercises/{item['id']}").status_code == 200
     assert api.get(f"/api/progress/{item['id']}").json()["status"] == "not_started"
 
@@ -225,6 +229,139 @@ def test_progress_and_submit(tmp_path, monkeypatch):
     response = api.post("/api/submit", json={"exercise_id": "sample", "code": "return 1"})
     assert response.json()["accepted"] is True
     assert api.get("/api/progress/sample").json()["status"] == "completed"
+
+
+def test_reference_solution_revalidates_code_and_returns_only_vetted_fields(tmp_path, monkeypatch):
+    api = client(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        main,
+        "reference_solution_review_status",
+        lambda *_: SimpleNamespace(
+            reviewed=True,
+            reason=None,
+            policy_id="kitcode-reference-best-v1",
+            policy=(
+                "Meet the intended Big-O time bound, then auxiliary space, "
+                "then the fewest clear lines without sacrificing readability."
+            ),
+        ),
+    )
+    endpoint = "/api/exercises/sample/reference-solution"
+    rejected = api.post(endpoint, json={"code": "return 0", "language": "python"})
+    assert rejected.status_code == 403
+    assert "accepted answer" in rejected.json()["detail"]
+
+    # The progress API is client-writable, so it must never unlock an answer.
+    assert api.put("/api/progress/sample", json={"status": "completed"}).status_code == 200
+    assert api.post(endpoint, json={"code": "return 0", "language": "python"}).status_code == 403
+    assert api.put("/api/progress/sample", json={"status": "in_progress"}).status_code == 200
+
+    revealed = api.post(endpoint, json={"code": "return 1", "language": "python"})
+    assert revealed.status_code == 200
+    assert revealed.headers["cache-control"] == "no-store"
+    payload = revealed.json()
+    assert set(payload) == {
+        "exercise_id", "language", "solution", "expected_complexity",
+        "line_count", "review_policy_id", "selection_basis",
+        "readability_focused", "readability_note",
+    }
+    assert payload["solution"] == "return 1\n"
+    assert payload["expected_complexity"] == "O(1) time, O(1) space"
+    assert payload["line_count"] == 1
+    assert payload["review_policy_id"] == "kitcode-reference-best-v1"
+    assert "Big-O time" in payload["selection_basis"]
+    assert "secret" not in json.dumps(payload)
+    assert api.get("/api/progress/sample").json()["status"] == "in_progress"
+    assert "solution" not in api.get("/api/exercises/sample").json()
+
+
+def test_reference_solution_waits_for_an_explicit_review_snapshot(tmp_path, monkeypatch):
+    api = client(tmp_path, monkeypatch)
+    response = api.post(
+        "/api/exercises/sample/reference-solution",
+        json={"code": "return 1", "language": "python"},
+    )
+    assert response.status_code == 409
+    assert "changed after this review snapshot" in response.json()["detail"]
+    assert "return 1" not in response.text
+
+
+def test_reference_solution_is_local_origin_only(tmp_path, monkeypatch):
+    api = client(tmp_path, monkeypatch)
+    response = api.post(
+        "/api/exercises/sample/reference-solution",
+        headers={"origin": "https://example.invalid"},
+        json={"code": "return 1", "language": "python"},
+    )
+    assert response.status_code == 403
+    assert "solution" not in response.text
+
+
+def test_reference_readability_focus_matches_whole_concepts_only():
+    assert main._reference_readability_focus({
+        "title": "Readable cache class",
+        "description": "Design a human-facing API.",
+        "topics": ["oop"],
+    }) is True
+    assert main._reference_readability_focus({
+        "title": "Euler circuit classification",
+        "description": "Loop over every edge.",
+        "topics": ["loops"],
+    }) is False
+
+
+def test_reference_solution_rejects_language_mismatch_and_unknown_exercise(tmp_path, monkeypatch):
+    api = client(tmp_path, monkeypatch)
+    assert api.post(
+        "/api/exercises/sample/reference-solution",
+        json={"code": "return 1", "language": "java"},
+    ).status_code == 409
+    assert api.post(
+        "/api/exercises/missing/reference-solution",
+        json={"code": "return 1", "language": "python"},
+    ).status_code == 404
+
+
+def test_sql_reference_solution_identifies_its_canonical_dialect_without_leaking_fixtures(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "exercise_bank", exercise_bank)
+    monkeypatch.setattr(main, "DATA_FILE", tmp_path / "progress.json")
+    api = TestClient(main.app)
+    exercise = exercise_bank.EXERCISES["sql-filter-001"]
+    response = api.post(
+        "/api/exercises/sql-filter-001/reference-solution",
+        json={
+            "code": exercise["solution"],
+            "language": "sql",
+            "sql_dialect": "postgresql",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["solution"] == exercise["solution"]
+    assert payload["reference_dialect"] == "SQLite"
+    assert "bundled SQLite judge" in payload["dialect_note"]
+    assert "query plan" in payload["complexity_note"]
+    assert "setup_sql" not in response.text and "hidden_tests" not in response.text
+
+
+def test_class_reference_solution_never_exposes_the_private_harness(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "exercise_bank", exercise_bank)
+    monkeypatch.setattr(main, "DATA_FILE", tmp_path / "progress.json")
+    api = TestClient(main.app)
+    exercise = exercise_bank.EXERCISES["python-curated-281"]
+
+    response = api.post(
+        "/api/exercises/python-curated-281/reference-solution",
+        json={"code": exercise["solution"], "language": "python"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["solution"] == exercise["solution"]
+    assert "harness" not in response.text
+    assert all(
+        test["harness"] not in response.text
+        for test in exercise["public_tests"] + exercise["hidden_tests"]
+    )
 
 
 def test_sql_run_filter_trace_and_progress_language(tmp_path, monkeypatch):

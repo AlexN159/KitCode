@@ -46,9 +46,11 @@ from sqlglot.errors import ParseError
 try:
     from . import exercise_bank
     from .generated_sql_templates import choose_schema, visible_schema_description
+    from .reference_solution_review import reference_solution_review_status
 except ImportError:  # makes the service boot while an exercise bank is developed
     exercise_bank = None
     from generated_sql_templates import choose_schema, visible_schema_description
+    from reference_solution_review import reference_solution_review_status
 
 APP_DIR = Path(__file__).resolve().parent
 load_dotenv(APP_DIR.parent / ".env")
@@ -92,6 +94,11 @@ class TraceRequest(RunRequest):
 
 class SubmitRequest(BaseModel):
     exercise_id: str = Field(min_length=1, max_length=160)
+    code: str = Field(max_length=MAX_CODE)
+    language: Literal["python", "java", "sql"] | None = None
+    sql_dialect: Literal["sqlite", "postgresql", "mysql", "mssql"] = "sqlite"
+
+class ReferenceSolutionRequest(BaseModel):
     code: str = Field(max_length=MAX_CODE)
     language: Literal["python", "java", "sql"] | None = None
     sql_dialect: Literal["sqlite", "postgresql", "mysql", "mssql"] = "sqlite"
@@ -1762,29 +1769,27 @@ def trace(request: TraceRequest):
     if error: return {"ok": False, "stdout": "", "stderr": error, "steps": [], "timed_out": False}
     return _trace(request.code, request.input, request.timeout_seconds, request.max_steps)
 
-@app.post("/api/submit")
-def submit(request: SubmitRequest):
-    exercise = _raw_exercise(request.exercise_id)
-    if not exercise: raise HTTPException(404, "Exercise not found")
-    language = _exercise_language(exercise)
-    if request.language is not None and request.language != language:
-        raise HTTPException(409, "The selected language does not match this exercise.")
+def _judge_submission(exercise_id: str, exercise: dict[str, Any], code: str,
+                      language: str, sql_dialect: str) -> dict[str, Any]:
+    """Run one submission without mutating learner progress."""
     validator = getattr(exercise_bank, "validate_submission", None) if exercise_bank else None
     if exercise.get("source") == "ai_generated":
-        result = _validate_multilanguage_submission(exercise, request.code, language, DEFAULT_TIMEOUT, request.sql_dialect)
+        result = _validate_multilanguage_submission(exercise, code, language, DEFAULT_TIMEOUT, sql_dialect)
         result["verification"] = "provisional"
     elif language == "python":
         if not validator: raise HTTPException(503, "Exercise validator is not ready")
-        result = validator(request.exercise_id, request.code, timeout_seconds=DEFAULT_TIMEOUT)
+        result = validator(exercise_id, code, timeout_seconds=DEFAULT_TIMEOUT)
     else:
-        result = _validate_multilanguage_submission(exercise, request.code, language, DEFAULT_TIMEOUT, request.sql_dialect)
+        result = _validate_multilanguage_submission(exercise, code, language, DEFAULT_TIMEOUT, sql_dialect)
     if language == "sql":
-        # Submission results are explicit too: dialect syntax was accepted and
-        # translated, but all fixtures were evaluated by the bundled SQLite
-        # engine rather than an external database server.
-        result.update({"requested_dialect": request.sql_dialect, "executed_engine": "sqlite"})
+        # All dialects are parsed/transpiled, then judged against fresh SQLite
+        # fixtures. Keep that distinction visible in every result.
+        result.update({"requested_dialect": sql_dialect, "executed_engine": "sqlite"})
+    return result
+
+def _submission_accepted(result: dict[str, Any]) -> bool:
     passed_value = result.get("passed")
-    accepted = bool(
+    return bool(
         result.get("status") == "passed"
         or result.get("ok") is True
         or passed_value is True
@@ -1795,6 +1800,92 @@ def submit(request: SubmitRequest):
             and passed_value == result.get("total")
         )
     )
+
+def _reference_readability_focus(exercise: dict[str, Any]) -> bool:
+    text = " ".join((
+        str(exercise.get("title", "")),
+        str(exercise.get("description", "")),
+        " ".join(str(topic) for topic in exercise.get("topics", [])),
+    )).casefold()
+    return bool(re.search(
+        r"\b(?:class|classes|oop|design|readability|readable|maintainability|api)\b"
+        r"|\bobject(?:-| )oriented\b",
+        text,
+    ))
+
+@app.post("/api/exercises/{exercise_id}/reference-solution")
+def reference_solution(
+    exercise_id: str,
+    request: ReferenceSolutionRequest,
+    http_request: Request,
+):
+    """Reveal one curated reference only after the supplied code passes again."""
+    _require_loopback(http_request)
+    _require_local_origin(http_request)
+    exercise = _raw_exercise(exercise_id)
+    if not exercise: raise HTTPException(404, "Exercise not found")
+    if exercise.get("source") == "ai_generated":
+        raise HTTPException(409, "Provisional AI exercises do not have a vetted reference answer.")
+    language = _exercise_language(exercise)
+    if request.language is not None and request.language != language:
+        raise HTTPException(409, "The selected language does not match this exercise.")
+    solution = exercise.get("solution")
+    if not isinstance(solution, str) or not solution.strip():
+        raise HTTPException(404, "This exercise does not have a vetted reference answer.")
+    review = reference_solution_review_status(
+        exercise,
+        getattr(exercise_bank, "EXERCISES", {}),
+    )
+    if not review.reviewed:
+        raise HTTPException(
+            409,
+            review.reason or "This reference answer is awaiting editorial review.",
+        )
+    result = _judge_submission(
+        exercise_id,
+        exercise,
+        request.code,
+        language,
+        request.sql_dialect,
+    )
+    if not _submission_accepted(result):
+        raise HTTPException(403, "Submit an accepted answer before viewing the reference.")
+    readability_focused = _reference_readability_focus(exercise)
+    payload: dict[str, Any] = {
+        "exercise_id": exercise_id,
+        "language": language,
+        "solution": solution,
+        "expected_complexity": str(exercise.get("expected_complexity", "Not specified")),
+        "line_count": sum(1 for line in solution.splitlines() if line.strip()),
+        "review_policy_id": review.policy_id,
+        "selection_basis": review.policy,
+        "readability_focused": readability_focused,
+        "readability_note": (
+            "This exercise also evaluates human-readable structure, so clear names and the required API take priority over code-golf."
+            if readability_focused else
+            "Equivalent answers are equally strong; shorter code wins only when it stays straightforward to read and maintain."
+        ),
+    }
+    if language == "sql":
+        payload.update({
+            "reference_dialect": "SQLite",
+            "dialect_note": "This is the canonical query used by the bundled SQLite judge; your selected dialect may use equivalent syntax.",
+            "complexity_note": str(exercise.get(
+                "reference_complexity_note",
+                "Auxiliary space depends on the database engine and query plan.",
+            )),
+        })
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+
+@app.post("/api/submit")
+def submit(request: SubmitRequest):
+    exercise = _raw_exercise(request.exercise_id)
+    if not exercise: raise HTTPException(404, "Exercise not found")
+    language = _exercise_language(exercise)
+    if request.language is not None and request.language != language:
+        raise HTTPException(409, "The selected language does not match this exercise.")
+    result = _judge_submission(request.exercise_id, exercise, request.code, language, request.sql_dialect)
+    accepted = _submission_accepted(result)
     result["accepted"] = accepted
     if accepted:
         with _progress_lock:
