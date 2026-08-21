@@ -2,6 +2,7 @@
 /* eslint-disable jsx-a11y/no-noninteractive-element-interactions -- the modal backdrop has an explicit keyboard-accessible close button */
 import Editor, { loader, type OnMount } from "@monaco-editor/react";
 import * as localMonaco from "monaco-editor/esm/vs/editor/editor.api";
+import "monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController";
 import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
 import "monaco-editor/esm/vs/basic-languages/sql/sql.contribution";
 import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
@@ -18,6 +19,7 @@ import {
   clearPersistedDraft,
   readPersistedDraft,
 } from "./storage-migration.mjs";
+import { findPythonPrefixCompletions } from "./python-completions.mjs";
 import type {
   CSSProperties,
   FormEvent,
@@ -411,6 +413,38 @@ const languages: Array<{
     monaco: "java",
   },
 ];
+const pythonKeywordCompletions = new Set([
+  "break",
+  "class",
+  "continue",
+  "def",
+  "elif",
+  "else",
+  "except",
+  "finally",
+  "for",
+  "from",
+  "if",
+  "import",
+  "in",
+  "not",
+  "or",
+  "pass",
+  "return",
+  "try",
+  "while",
+  "with",
+]);
+const pythonTypeCompletions = new Set([
+  "bool",
+  "dict",
+  "float",
+  "int",
+  "list",
+  "set",
+  "str",
+  "tuple",
+]);
 const practiceLevels: Array<{
   id: PracticeLevel;
   label: string;
@@ -1074,6 +1108,16 @@ function readInlineHintPreference() {
     return true;
   }
 }
+function readPythonAutocompletePreference() {
+  if (typeof window === "undefined") return true;
+  try {
+    return (
+      window.localStorage.getItem("kitcode:python-autocomplete") !== "off"
+    );
+  } catch {
+    return true;
+  }
+}
 function readMascotPreference() {
   if (typeof window === "undefined") return true;
   try {
@@ -1205,6 +1249,9 @@ export default function Home() {
   const [inlineHintsEnabled, setInlineHintsEnabled] = useState(
     readInlineHintPreference,
   );
+  const [pythonAutocompleteEnabled, setPythonAutocompleteEnabled] = useState(
+    readPythonAutocompletePreference,
+  );
   const [editorMountVersion, setEditorMountVersion] = useState(0);
   const [editorEdit, setEditorEdit] = useState<EditorEdit | null>(null);
   const [pendingEditorEdit, setPendingEditorEdit] = useState<EditorEdit | null>(
@@ -1290,6 +1337,7 @@ export default function Home() {
   const mascotSleepingRef = useRef(false);
   const mascotLastActivityAtRef = useRef(0);
   const celebrationsEnabledRef = useRef(celebrationsEnabled);
+  const pythonAutocompleteEnabledRef = useRef(pythonAutocompleteEnabled);
   const mascotEnabledRef = useRef(mascotEnabled);
   const selectedRef = useRef("");
   const dialogRestoreRef = useRef<HTMLElement | null>(null);
@@ -1333,6 +1381,71 @@ export default function Home() {
   useEffect(() => {
     aiStatusRef.current = aiStatus;
   }, [aiStatus]);
+  useEffect(() => {
+    const provider = localMonaco.languages.registerCompletionItemProvider(
+      "python",
+      {
+        provideCompletionItems(model, position) {
+          const learnerModel = editorRef.current?.getModel();
+          if (
+            !pythonAutocompleteEnabledRef.current ||
+            !learnerModel ||
+            model !== learnerModel
+          ) {
+            return { suggestions: [] };
+          }
+
+          const word = model.getWordUntilPosition(position);
+          const line = model.getLineContent(position.lineNumber);
+          const characterBeforeWord = line.charAt(word.startColumn - 2);
+          const characterAfterCursor = line.charAt(position.column - 1);
+          const completions = findPythonPrefixCompletions(word.word);
+          if (
+            characterBeforeWord === "." ||
+            /[A-Za-z0-9_]/.test(characterAfterCursor) ||
+            completions.length === 0
+          ) {
+            return { suggestions: [] };
+          }
+
+          const range = new localMonaco.Range(
+            position.lineNumber,
+            word.startColumn,
+            position.lineNumber,
+            word.endColumn,
+          );
+          return {
+            suggestions: completions.map((label) => {
+              const keyword = pythonKeywordCompletions.has(label);
+              const builtInType = pythonTypeCompletions.has(label);
+              return {
+                label,
+                kind: keyword
+                  ? localMonaco.languages.CompletionItemKind.Keyword
+                  : label === "None"
+                    ? localMonaco.languages.CompletionItemKind.Constant
+                    : builtInType
+                      ? localMonaco.languages.CompletionItemKind.Class
+                      : localMonaco.languages.CompletionItemKind.Function,
+                detail: keyword
+                  ? "Python keyword"
+                  : builtInType
+                    ? "Python built-in type"
+                    : label === "None"
+                      ? "Python constant"
+                      : "Python built-in function",
+                insertText: label,
+                filterText: label,
+                sortText: label,
+                range,
+              };
+            }),
+          };
+        },
+      },
+    );
+    return () => provider.dispose();
+  }, []);
   useEffect(() => {
     const timer = window.setInterval(
       () => setElapsed((value) => value + 1),
@@ -2257,6 +2370,10 @@ export default function Home() {
           ? Boolean(aiStatus.anthropic_configured)
           : true;
   const activeLanguage = languageMeta(selectedLanguage);
+  const pythonAutocompleteActive =
+    selectedLanguage === "python" &&
+    pythonAutocompleteEnabled &&
+    !bestSolutionActive;
   const bestSolutionFile = `best-${activeLanguage.file}`;
   const activeSqlDialect = sqlDialectMeta(sqlDialect);
   const sqlExecutionEngineValue =
@@ -2806,6 +2923,18 @@ export default function Home() {
     try {
       window.localStorage.setItem(
         "kitcode:inline-hints",
+        enabled ? "on" : "off",
+      );
+    } catch {
+      // The in-memory preference still works when browser storage is unavailable.
+    }
+  }
+  function setPythonAutocompletePreference(enabled: boolean) {
+    pythonAutocompleteEnabledRef.current = enabled;
+    setPythonAutocompleteEnabled(enabled);
+    try {
+      window.localStorage.setItem(
+        "kitcode:python-autocomplete",
         enabled ? "on" : "off",
       );
     } catch {
@@ -4932,6 +5061,37 @@ export default function Home() {
                   glyphMargin: true,
                   padding: { top: 14 },
                   accessibilitySupport: "on",
+                  quickSuggestions:
+                    selectedLanguage === "python"
+                      ? pythonAutocompleteActive
+                        ? {
+                            other: "on",
+                            comments: "off",
+                            strings: "off",
+                          }
+                        : false
+                      : undefined,
+                  quickSuggestionsDelay: pythonAutocompleteActive
+                    ? 100
+                    : undefined,
+                  wordBasedSuggestions:
+                    selectedLanguage === "python" ? "off" : undefined,
+                  suggestOnTriggerCharacters: pythonAutocompleteActive
+                    ? false
+                    : undefined,
+                  acceptSuggestionOnEnter: pythonAutocompleteActive
+                    ? "on"
+                    : undefined,
+                  suggestSelection: pythonAutocompleteActive
+                    ? "first"
+                    : undefined,
+                  suggest: pythonAutocompleteActive
+                    ? {
+                        showWords: false,
+                        selectionMode: "whenQuickSuggestion",
+                        matchOnWordStartOnly: true,
+                      }
+                    : undefined,
                   readOnly: bestSolutionActive,
                   domReadOnly: bestSolutionActive,
                   readOnlyMessage: {
@@ -5726,6 +5886,24 @@ export default function Home() {
                     <small>
                       Turn this off to show AI hints only in the card below your
                       code.
+                    </small>
+                  </label>
+                </div>
+                <div className="celebration-setting">
+                  <input
+                    id="python-autocomplete"
+                    type="checkbox"
+                    checked={pythonAutocompleteEnabled}
+                    onChange={(event) =>
+                      setPythonAutocompletePreference(event.target.checked)
+                    }
+                  />
+                  <label htmlFor="python-autocomplete">
+                    <strong>Python autocomplete</strong>
+                    <small>
+                      Suggest common Python keywords and built-ins after three
+                      letters. Press Enter to accept; KitCode never autocorrects
+                      or renames your code.
                     </small>
                   </label>
                 </div>

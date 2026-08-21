@@ -1110,6 +1110,58 @@ test("adaptive coach offers a non-mutating editor hint workflow", async () => {
   assert.match(styles, /forced-colors:active/);
 });
 
+test("Python autocomplete is curated, optional, and explicitly accepted", async () => {
+  const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
+
+  assert.match(
+    page,
+    /monaco-editor\/esm\/vs\/editor\/contrib\/suggest\/browser\/suggestController/,
+  );
+  assert.match(page, /import \{ findPythonPrefixCompletions \} from "\.\/python-completions\.mjs"/);
+  assert.match(
+    page,
+    /function readPythonAutocompletePreference\(\)[\s\S]*?localStorage\.getItem\("kitcode:python-autocomplete"\) !== "off"/,
+  );
+  assert.match(
+    page,
+    /const \[pythonAutocompleteEnabled, setPythonAutocompleteEnabled\] = useState\(\s*readPythonAutocompletePreference/,
+  );
+  assert.match(
+    page,
+    /registerCompletionItemProvider\(\s*"python",[\s\S]*?model !== learnerModel[\s\S]*?getWordUntilPosition\(position\)[\s\S]*?findPythonPrefixCompletions\(word\.word\)/,
+  );
+  assert.match(
+    page,
+    /const characterAfterCursor = line\.charAt\(position\.column - 1\)[\s\S]*?\/\[A-Za-z0-9_\]\/\.test\(characterAfterCursor\)/,
+  );
+  assert.match(
+    page,
+    /new localMonaco\.Range\(\s*position\.lineNumber,\s*word\.startColumn,\s*position\.lineNumber,\s*word\.endColumn/,
+  );
+  assert.match(page, /return \(\) => provider\.dispose\(\)/);
+  assert.match(
+    page,
+    /function setPythonAutocompletePreference\(enabled: boolean\)[\s\S]*?pythonAutocompleteEnabledRef\.current = enabled[\s\S]*?localStorage\.setItem\(\s*"kitcode:python-autocomplete",\s*enabled \? "on" : "off"/,
+  );
+  assert.match(page, /comments: "off",\s*strings: "off"/);
+  assert.match(
+    page,
+    /wordBasedSuggestions:\s*selectedLanguage === "python" \? "off" : undefined/,
+  );
+  assert.match(
+    page,
+    /acceptSuggestionOnEnter: pythonAutocompleteActive\s*\? "on"/,
+  );
+  assert.match(
+    page,
+    /id="python-autocomplete"\s+type="checkbox"\s+checked=\{pythonAutocompleteEnabled\}/,
+  );
+  assert.match(
+    page,
+    /<label htmlFor="python-autocomplete">[\s\S]*?Python autocomplete[\s\S]*?never autocorrects\s+or renames your code/,
+  );
+});
+
 test("coach keeps completed hints across edits and can retry a failed chat request", async () => {
   const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
   assert.match(page, /const coachDocumentRevisionRef = useRef\(0\)/);
