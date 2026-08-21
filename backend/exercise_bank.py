@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from textwrap import dedent
 import ast
 import json
 import os
@@ -249,19 +250,8 @@ def _exercise(
 
 
 def _int_solution(expression: str) -> str:
-    return f'''import sys
-
-
-def solve() -> None:
-    data = list(map(int, sys.stdin.read().split()))
-    if not data:
-        return
-    n = data[0]
-    print({expression})
-
-
-if __name__ == "__main__":
-    solve()
+    return f'''n = int(input())
+print({expression})
 '''
 
 
@@ -292,20 +282,9 @@ def _single_int_bank() -> list[dict]:
 
 def _list_problem(key: str, title: str, difficulty: str, topics: list[str], description: str,
                   constraints: list[str], cases: list[tuple[str, str]], body: str, hints: list[str], complexity: str) -> dict:
-    solution = f'''import sys
-
-
-def solve() -> None:
-    tokens = sys.stdin.read().split()
-    if not tokens:
-        return
-    n = int(tokens[0])
-    nums = list(map(int, tokens[1:1+n]))
-{body}
-
-
-if __name__ == "__main__":
-    solve()
+    solution = f'''n = int(input())
+nums = list(map(int, input().split()))
+{dedent(body).strip()}
 '''
     return _exercise(key=key, title=title, difficulty=difficulty, topics=topics,
         description=description, constraints=constraints, cases=cases, solution=solution,
@@ -337,7 +316,7 @@ def _array_bank() -> list[dict]:
         ("First Peak Index", "Medium", ["arrays", "iteration"], f"{list_input} Print the first index i whose value is greater than both neighbors. Endpoints are not peaks; print -1 when none exists.", [("5\n1 3 2 4 4\n", "1"),("3\n1 2 3\n", "-1"),("5\n0 2 1 2 0\n", "1")], "    answer = -1\n    for i in range(1, n - 1):\n        if nums[i] > nums[i-1] and nums[i] > nums[i+1]:\n            answer = i\n            break\n    print(answer)", "O(n) time, O(1) extra space"),
         ("Move Zeros to End", "Easy", ["arrays", "two-pointers"], f"{list_input} Keep non-zero values in their original order, then append all zeros.", [("6\n0 1 0 3 12 0\n", "1 3 12 0 0 0"),("3\n0 0 0\n", "0 0 0"),("3\n1 2 3\n", "1 2 3")], "    answer = [x for x in nums if x != 0]\n    answer += [0] * (n - len(answer))\n    print(*answer)", "O(n) time, O(n) space"),
         ("Sorted Unique", "Easy", ["arrays", "hashing"], f"{list_input} Print the distinct values in ascending order.", [("6\n3 1 3 2 1 2\n", "1 2 3"),("1\n5\n", "5"),("0\n\n", "")], "    print(*sorted(set(nums)))", "O(n log n) time, O(n) space"),
-        ("Frequency of Target", "Easy", ["arrays", "counting"], f"{list_input} Line 3 contains the target t. Print how many of the integers equal t.", [("5\n1 2 2 3 2\n2\n", "3"),("0\n\n7\n", "0"),("3\n-1 0 -1\n-1\n", "2")], "    target = int(tokens[1+n])\n    print(nums.count(target))", "O(n) time, O(1) extra space"),
+        ("Frequency of Target", "Easy", ["arrays", "counting"], f"{list_input} Line 3 contains the target t. Print how many of the integers equal t.", [("5\n1 2 2 3 2\n2\n", "3"),("0\n\n7\n", "0"),("3\n-1 0 -1\n-1\n", "2")], "    target = int(input())\n    print(nums.count(target))", "O(n) time, O(1) extra space"),
     ]
     out=[]
     for i, (title,diff,topics,desc,cases,body,complexity) in enumerate(specs,1):
@@ -387,7 +366,7 @@ def _parametric_bank() -> list[dict]:
     rather than disguising the same task under different nouns.
     """
     records = [
-      ("two-sum-indices","Pair With Target","Easy",["arrays","hashing"],"Read n, n integers, then target. Print the first pair of zero-based indices `i j` with i < j whose values sum to target. Print `NONE` if absent.",[("4\n2 7 11 15\n9\n","0 1"),("3\n1 2 3\n7\n","NONE"),("4\n3 3 4 5\n6\n","0 1")],'''    target = int(tokens[n + 1])
+      ("two-sum-indices","Pair With Target","Easy",["arrays","hashing"],"Read n, n integers, then target. Print the first pair of zero-based indices `i j` with i < j whose values sum to target. Print `NONE` if absent.",[("4\n2 7 11 15\n9\n","0 1"),("3\n1 2 3\n7\n","NONE"),("4\n3 3 4 5\n6\n","0 1")],'''    target = int(input())
     seen = {}
     for j, value in enumerate(nums):
         if target - value in seen:
@@ -411,7 +390,7 @@ def _parametric_bank() -> list[dict]:
         elif not stack or stack.pop() != pairs[ch]:
             print('no'); return
     print('yes' if not stack else 'no')''',"O(n) time, O(n) space"),
-      ("binary-search","Binary Search Position","Easy",["arrays","binary-search"],"The n integers are sorted in nondecreasing order. Then a target is given. Print its first index, or -1.",[("5\n1 2 2 2 9\n2\n","1"),("3\n1 4 8\n3\n","-1"),("0\n\n5\n","-1")],'''    target = int(tokens[n + 1])
+      ("binary-search","Binary Search Position","Easy",["arrays","binary-search"],"The n integers are sorted in nondecreasing order. Then a target is given. Print its first index, or -1.",[("5\n1 2 2 2 9\n2\n","1"),("3\n1 4 8\n3\n","-1"),("0\n\n5\n","-1")],'''    target = int(input())
     lo, hi, answer = 0, n - 1, -1
     while lo <= hi:
         mid = (lo + hi) // 2
@@ -420,7 +399,7 @@ def _parametric_bank() -> list[dict]:
             hi = mid - 1
         else: lo = mid + 1
     print(answer)''',"O(log n) time, O(1) space"),
-      ("range-sum-query","Range Sum Query","Easy",["prefix-sum","arrays"],"Read n, the list, then inclusive indices l and r. Print the sum from l through r.",[("5\n2 4 1 3 5\n1 3\n","8"),("1\n7\n0 0\n","7"),("4\n-1 2 -3 4\n0 2\n","-2")],'''    left, right = map(int, tokens[n + 1:n + 3])
+      ("range-sum-query","Range Sum Query","Easy",["prefix-sum","arrays"],"Read n, the list, then inclusive indices l and r. Print the sum from l through r.",[("5\n2 4 1 3 5\n1 3\n","8"),("1\n7\n0 0\n","7"),("4\n-1 2 -3 4\n0 2\n","-2")],'''    left, right = map(int, input().split())
     prefix = [0]
     for value in nums: prefix.append(prefix[-1] + value)
     print(prefix[right + 1] - prefix[left])''',"O(n) preprocessing time and space, O(1) query time"),
@@ -445,11 +424,10 @@ def _parametric_bank() -> list[dict]:
             while value + length in values: length += 1
             best = max(best, length)
     print(best)''',"O(n) expected time, O(n) space"),
-      ("rotate-array","Rotate Right","Medium",["arrays","modulo"],"Read n, n integers, then k. Rotate the list right by k positions and print it.",[("5\n1 2 3 4 5\n2\n","4 5 1 2 3"),("3\n1 2 3\n3\n","1 2 3"),("0\n\n9\n","")],'''    k = int(tokens[n + 1]) if len(tokens) > n + 1 else 0
+      ("rotate-array","Rotate Right","Medium",["arrays","modulo"],"Read n, n integers, then k. Rotate the list right by k positions and print it.",[("5\n1 2 3 4 5\n2\n","4 5 1 2 3"),("3\n1 2 3\n3\n","1 2 3"),("0\n\n9\n","")],'''    k = int(input())
     if n: k %= n
     print(*(nums[-k:] + nums[:-k] if k else nums))''',"O(n) time, O(n) space"),
-      ("merge-intervals","Merge Intervals","Medium",["intervals","sorting"],"Read n, then n lines of inclusive start/end pairs. Merge overlapping or touching intervals. Print one `start end` pair per line.",[("3\n1 3\n2 6\n8 10\n","1 6\n8 10"),("2\n1 2\n3 4\n","1 4"),("0\n","")],'''    values = list(map(int, tokens[1:]))
-    intervals = sorted(zip(values[::2], values[1::2]))
+      ("merge-intervals","Merge Intervals","Medium",["intervals","sorting"],"Read n, then n lines of inclusive start/end pairs. Merge overlapping or touching intervals. Print one `start end` pair per line.",[("3\n1 3\n2 6\n8 10\n","1 6\n8 10"),("2\n1 2\n3 4\n","1 4"),("0\n","")],'''    intervals = sorted(tuple(map(int, input().split())) for _ in range(n))
     merged = []
     for start, end in intervals:
         if not merged or start > merged[-1][1] + 1: merged.append([start, end])
@@ -477,18 +455,14 @@ def _parametric_bank() -> list[dict]:
     ]
     out=[]
     for key,title,diff,topics,description,cases,body,complexity in records:
-        # Some records intentionally have custom line formats, so their solutions
-        # use a token reader but remain valid for all listed cases.
-        solution=f'''import sys
-
-
-def solve() -> None:
-    tokens = sys.stdin.read().split()
-    if not tokens:
-        return
-    n = int(tokens[0])
-    nums = list(map(int, tokens[1:1+n]))
-{body}
+        # Most records use the documented n/list line structure. Merge Intervals
+        # reads its documented pair-per-line shape directly.
+        if key == "merge-intervals":
+            input_setup = "    n = int(input())\n"
+        else:
+            input_setup = "    n = int(input())\n    nums = list(map(int, input().split()))\n"
+        solution=f'''def solve() -> None:
+{input_setup}{body}
 
 
 if __name__ == "__main__":
@@ -520,13 +494,13 @@ def _generated_drills() -> list[dict]:
       ("First Negative Index", "Print the index of the first negative value, or -1.", "next((i for i, x in enumerate(nums) if x < 0), -1)", lambda a: str(next((i for i,x in enumerate(a) if x<0),-1)), "Easy", "O(n) time, O(1) space", ["arrays"]),
       ("Last Positive Index", "Print the index of the last positive value, or -1.", "next((i for i in range(n-1, -1, -1) if nums[i] > 0), -1)", lambda a: str(next((i for i in range(len(a)-1,-1,-1) if a[i]>0),-1)), "Easy", "O(n) time, O(1) space", ["arrays"]),
       ("Distinct Count", "Print how many distinct values are present.", "len(set(nums))", lambda a: str(len(set(a))), "Easy", "O(n) time, O(n) space", ["arrays", "hashing"]),
-      ("Duplicate Excess", "Print how many entries remain after keeping only one copy of each value.", "n - len(set(nums))", lambda a: str(len(a)-len(set(a))), "Easy", "O(n) time, O(n) space", ["arrays", "hashing"]),
+      ("Duplicate Copies to Remove", "Read n integers. Keep one copy of each distinct value and remove every additional copy. Print how many values are removed.", "n - len(set(nums))", lambda a: str(len(a)-len(set(a))), "Easy", "O(n) time, O(n) space", ["arrays", "hashing"]),
       ("Smallest Absolute Value", "Print the value with smallest absolute value; resolve ties by the smaller numeric value. Print `NONE` for empty input.", "min(nums, key=lambda x: (abs(x), x)) if nums else 'NONE'", lambda a: str(min(a,key=lambda x:(abs(x),x)) if a else 'NONE'), "Easy", "O(n) time, O(1) space", ["arrays", "math"]),
-      ("Sorted Squares", "Square every value, sort the results, and print them.", "print(*sorted(x*x for x in nums)); return", lambda a: ' '.join(map(str,sorted(x*x for x in a))), "Easy", "O(n log n) time, O(n) space", ["arrays", "sorting"]),
+      ("Sorted Squares", "Square every value, sort the results, and print them.", "print(*sorted(x * x for x in nums))", lambda a: ' '.join(map(str,sorted(x*x for x in a))), "Easy", "O(n log n) time, O(n) space", ["arrays", "sorting"]),
       ("Median of Sorted List", "The list is sorted and non-empty with odd length. Print its middle value.", "nums[n // 2]", lambda a: str(a[len(a)//2]), "Easy", "O(1) time, O(1) space", ["arrays"]),
       ("Pairwise Minimum Sum", "Pair the first with last, second with second-last, and so on. Print the sum of the smaller values in every pair. n is even.", "sum(min(nums[i], nums[n-1-i]) for i in range(n // 2))", lambda a: str(sum(min(a[i],a[-1-i]) for i in range(len(a)//2))), "Medium", "O(n) time, O(1) space", ["arrays", "two-pointers"]),
       ("Local Valley Count", "Count non-endpoint values lower than both neighbours.", "sum(nums[i] < nums[i-1] and nums[i] < nums[i+1] for i in range(1, n-1))", lambda a: str(sum(a[i]<a[i-1] and a[i]<a[i+1] for i in range(1,len(a)-1))), "Easy", "O(n) time, O(1) space", ["arrays"]),
-      ("Prefix Threshold Index", "Read n, n non-negative numbers, then a target. Print the first index where running sum reaches target, or -1.", "target = int(tokens[n+1])\n    total = 0\n    for i, x in enumerate(nums):\n        total += x\n        if total >= target: print(i); return\n    print(-1); return", lambda a: '', "Medium", "O(n) time, O(1) space", ["arrays", "prefix-sum"]),
+      ("Prefix Threshold Index", "Read n, n non-negative numbers, then a target. Print the first index where running sum reaches target, or -1.", "target = int(input())\n    total = 0\n    answer = -1\n    for i, x in enumerate(nums):\n        total += x\n        if total >= target:\n            answer = i\n            break\n    print(answer)", lambda a: '', "Medium", "O(n) time, O(1) space", ["arrays", "prefix-sum"]),
     ]
     samples=[[2,-1,3,0],[0,0,0],[5],[-4,-1,2,7],[1,2,3,4,5]]
     out=[]

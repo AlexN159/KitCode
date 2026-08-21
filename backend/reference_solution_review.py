@@ -25,7 +25,9 @@ REVIEW_POLICY = (
     "auxiliary space. When time and space are equivalent, prefer the fewest "
     "clear, idiomatic lines. Do not code-golf: use a slightly longer answer "
     "when it materially improves naming, invariants, edge-case handling, or "
-    "a human-facing API/readability requirement."
+    "a human-facing API/readability requirement. Assume the documented input "
+    "contract; omit defensive missing-input boilerplate unless empty input is "
+    "part of that contract."
 )
 
 
@@ -45,7 +47,7 @@ REVIEWED_CORPORA: Mapping[str, LanguageReviewSnapshot] = MappingProxyType({
     "python": LanguageReviewSnapshot(
         language="python",
         exercise_count=400,
-        corpus_sha256="83e54f7ecc899ff8c9f1ae5f234e0161e24c663f351ad5e8c0c2cfeb5110d56d",
+        corpus_sha256="dd0cde073e64577d143a2e43f455b32edacb290c5d823d24156077e583629f19",
     ),
     "java": LanguageReviewSnapshot(
         language="java",

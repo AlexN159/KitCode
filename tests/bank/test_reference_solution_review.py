@@ -38,6 +38,36 @@ def test_every_curated_reference_is_bound_to_the_best_answer_review_policy() -> 
         assert status.policy_id == REVIEW_POLICY_ID
 
 
+def test_python_best_answers_use_the_documented_input_without_defensive_boilerplate() -> None:
+    python_solutions = [
+        exercise["solution"]
+        for exercise in EXERCISES.values()
+        if exercise.get("language", "python") == "python"
+    ]
+
+    assert all("if not tokens:" not in solution for solution in python_solutions)
+    assert all("if not data:" not in solution for solution in python_solutions)
+    assert all(
+        "tokens = sys.stdin.read().split()" not in solution
+        for solution in python_solutions
+    )
+    assert EXERCISES["number-001"]["solution"] == (
+        "n = int(input())\n"
+        "print('even' if n % 2 == 0 else 'odd')\n"
+    )
+    assert EXERCISES["array-001"]["solution"] == (
+        "n = int(input())\n"
+        "nums = list(map(int, input().split()))\n"
+        "print(sum(nums))\n"
+    )
+    duplicate_copies = EXERCISES["drill-014"]
+    assert duplicate_copies["title"] == "Duplicate Copies to Remove"
+    assert duplicate_copies["description"] == (
+        "Read n integers. Keep one copy of each distinct value and remove every "
+        "additional copy. Print how many values are removed."
+    )
+
+
 def test_any_reference_source_change_invalidates_its_language_review_snapshot() -> None:
     altered = dict(EXERCISES)
     original = dict(altered["number-001"])
