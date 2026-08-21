@@ -63,6 +63,10 @@ EDITOR_HINT_CODE_WINDOW = 6_000
 EDITOR_HINT_OUTPUT_TOKENS = 180
 EDITOR_HINT_OUTPUT_LIMIT = 2_000
 DEFAULT_TIMEOUT = 4.0
+# Compilation is infrastructure startup, not learner-program execution. A
+# bounded independent allowance prevents a cold JDK (especially on Windows)
+# from being reported as a timeout in an otherwise fast answer.
+JAVA_COMPILE_TIMEOUT = 12.0
 SUPPORTED_LANGUAGES = ("python", "java", "sql")
 SQL_DIALECTS = ("sqlite", "postgresql", "mysql", "mssql")
 SQLGLOT_DIALECTS = {"sqlite": "sqlite", "postgresql": "postgres", "mysql": "mysql", "mssql": "tsql"}
@@ -647,16 +651,14 @@ def _execute_java(code: str, user_input: str, timeout: float) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="kitcode-java-") as directory:
         source = Path(directory) / "Main.java"
         source.write_text(code, encoding="utf-8")
-        compile_timeout = max(0.2, min(timeout * 0.45, 4.0))
-        compiled = _execute_command([javac, "-encoding", "UTF-8", "-d", directory, str(source)], "", compile_timeout, directory)
+        compiled = _execute_command([javac, "-encoding", "UTF-8", "-d", directory, str(source)], "", JAVA_COMPILE_TIMEOUT, directory)
         if not compiled["ok"]:
             compiled["stderr"] = "Java compilation failed:\n" + compiled["stderr"]
             return compiled
-        remaining = max(0.2, timeout - (compiled["duration_ms"] / 1000))
         # The learner process job has a 256 MiB safety cap.  A stock JVM can
         # reserve a much larger G1 heap before Main starts, so use a compact
         # deterministic heap/collector suitable for short practice drills.
-        result = _execute_command([java, "-Xms16m", "-Xmx128m", "-XX:+UseSerialGC", "-cp", directory, "Main"], user_input, remaining, directory)
+        result = _execute_command([java, "-Xms16m", "-Xmx128m", "-XX:+UseSerialGC", "-cp", directory, "Main"], user_input, timeout, directory)
         result["duration_ms"] += compiled["duration_ms"]
         return result
 
@@ -905,7 +907,13 @@ def _validate_multilanguage_submission(exercise: dict[str, Any], code: str, lang
 
 
 def _validate_java_submission(tests: list[tuple[str, dict[str, Any]]], code: str, timeout: float) -> dict[str, Any]:
-    """Compile Main once, then execute it separately for each isolated case."""
+    """Compile Main once, then execute it separately for each isolated case.
+
+    Java compilation uses the shared bounded startup allowance rather than
+    the per-case execution limit. A cold ``javac`` process on Windows can
+    take longer than a tiny exercise's runtime budget without implying that
+    the learner program is slow.
+    """
     javac, java = _java_tools()
     if not javac or not java:
         return {"status": "failed", "passed": 0, "total": len(tests), "results": [], "message": "Java is not ready. Install a JDK (Java 17 or newer), then restart KitCode."}
@@ -914,7 +922,7 @@ def _validate_java_submission(tests: list[tuple[str, dict[str, Any]]], code: str
     started, results = time.perf_counter(), []
     with tempfile.TemporaryDirectory(prefix="kitcode-java-submit-") as directory:
         source = Path(directory) / "Main.java"; source.write_text(code, encoding="utf-8")
-        compiled = _execute_command([javac, "-encoding", "UTF-8", "-d", directory, str(source)], "", min(4.0, max(0.2, timeout)), directory)
+        compiled = _execute_command([javac, "-encoding", "UTF-8", "-d", directory, str(source)], "", JAVA_COMPILE_TIMEOUT, directory)
         if not compiled["ok"]:
             return {"status": "failed", "passed": 0, "total": len(tests), "results": [{"number": 1, "visibility": "public", "passed": False, "input": tests[0][1].get("input", ""), "error": "Java compilation failed:\n" + compiled["stderr"]}], "message": "Java compilation failed."}
         command = [java, "-Xms16m", "-Xmx128m", "-XX:+UseSerialGC", "-cp", directory, "Main"]

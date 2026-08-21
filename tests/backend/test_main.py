@@ -36,6 +36,40 @@ def client(tmp_path, monkeypatch):
     return TestClient(main.app)
 
 
+def test_java_reference_solution_compilation_uses_bounded_startup_allowance_without_relaxing_runtime(monkeypatch):
+    """A cold JDK gets startup time; each learner process retains its limit."""
+    calls = []
+    monkeypatch.setattr(main, "_java_tools", lambda: ("javac", "java"))
+
+    def execute(command, user_input, timeout, directory):
+        calls.append((command, timeout))
+        if command[0] == "javac":
+            return {"ok": True, "stdout": "", "stderr": "", "exit_code": 0, "duration_ms": 1, "timed_out": False, "truncated": False}
+        return {"ok": True, "stdout": "ok\n", "stderr": "", "exit_code": 0, "duration_ms": 1, "timed_out": False, "truncated": False}
+
+    monkeypatch.setattr(main, "_execute_command", execute)
+    result = main._execute_java(
+        "public class Main {}",
+        "",
+        4.0,
+    )
+
+    assert result["ok"] is True
+    assert calls[0][0][0] == "javac" and calls[0][1] == main.JAVA_COMPILE_TIMEOUT
+    assert calls[1][0][0] == "java" and calls[1][1] == 4.0
+
+    calls.clear()
+    result = main._validate_java_submission(
+        [("public", {"input": "", "expected_output": "ok"})],
+        "public class Main {}",
+        4.0,
+    )
+
+    assert result["status"] == "passed"
+    assert calls[0][0][0] == "javac" and calls[0][1] == main.JAVA_COMPILE_TIMEOUT
+    assert calls[1][0][0] == "java" and calls[1][1] == 4.0
+
+
 def test_generated_exercise_is_separate_provisional_and_submittable(tmp_path, monkeypatch):
     api = client(tmp_path, monkeypatch)
     monkeypatch.setattr(main, "_ai_status", lambda: {"configured": True, "provider": "openai", "model": "test", "local_llm_url": "http://127.0.0.1:5000/"})
