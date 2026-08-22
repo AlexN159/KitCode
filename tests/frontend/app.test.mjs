@@ -1090,7 +1090,7 @@ test("adaptive coach offers a non-mutating editor hint workflow", async () => {
   assert.match(page, /onChange=\{bestSolutionActive \? undefined : handleEditorChange\}/);
   assert.match(page, /function cancelCoachWork\(\s*resetConversation = false,\s+discardVisibleHint = false/);
   assert.match(page, /if \(discardVisibleHint\) setEditorHint\(null\)/);
-  assert.match(page, /function handleEditorChange\(value\?: string\)[\s\S]*?coachActiveIntentRef\.current !== "hint"\) cancelCoachWork\(false\)[\s\S]*?setCode\(nextCode\)/);
+  assert.match(page, /function handleEditorChange\(value\?: string\)[\s\S]*?coachActiveIntentRef\.current !== "hint"\)[\s\S]*?cancelCoachWork\(false, false, true\)[\s\S]*?setCode\(nextCode\)/);
   const editorChangeBody = page.slice(page.indexOf("function handleEditorChange"), page.indexOf("function undoEditorEdit"));
   assert.doesNotMatch(editorChangeBody, /setEditorHint\(null\)/);
   const resetBody = page.slice(page.indexOf("function resetCode"), page.indexOf("function startWorkflow"));
@@ -1162,18 +1162,31 @@ test("Python autocomplete is curated, optional, and explicitly accepted", async 
   );
 });
 
-test("coach keeps completed hints across edits and can retry a failed chat request", async () => {
+test("side coach keeps retry available after failures and rebases it onto edited code", async () => {
   const page = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
   assert.match(page, /const coachDocumentRevisionRef = useRef\(0\)/);
   assert.match(page, /documentRevision: coachDocumentRevisionRef\.current/);
   assert.match(page, /coachDocumentRevisionRef\.current === snapshot\.documentRevision/);
   assert.match(page, /function coachResponseIsCurrent\([\s\S]*?snapshot\.intent === "hint"[\s\S]*?coachSnapshotMatchesScope/);
-  assert.match(page, /function handleEditorChange\(value\?: string\)[\s\S]*?coachDocumentRevisionRef\.current \+= 1[\s\S]*?coachActiveIntentRef\.current !== "hint"/);
+  assert.match(page, /const retryCoachSnapshotRef = useRef<CoachRequestSnapshot \| null>\(null\)/);
+  assert.match(page, /function setRetryCoachSnapshot\([\s\S]*?retryCoachSnapshotRef\.current = snapshot[\s\S]*?setRetryCoachSnapshotState\(snapshot\)/);
+  assert.match(page, /function coachIntentSupportsRetry\(intent\?: CoachIntent\)[\s\S]*?intent === "adaptive" \|\| intent === "edit"/);
+  assert.match(page, /function cancelCoachWork\([\s\S]*?preserveSideCoachRetry = false[\s\S]*?const previousRetry = retryCoachSnapshotRef\.current[\s\S]*?coachSnapshotMatchesScope\(previousRetry\)[\s\S]*?setRetryCoachSnapshot\(savedRetry\)/);
+  assert.match(page, /function handleEditorChange\(value\?: string\)[\s\S]*?coachDocumentRevisionRef\.current \+= 1[\s\S]*?cancelCoachWork\(false, false, true\)/);
+  assert.match(page, /function resetCode\(\)[\s\S]*?cancelCoachWork\(false, false, true\)[\s\S]*?coachDocumentRevisionRef\.current \+= 1/);
   assert.match(page, /Hint · based on an earlier draft/);
-  assert.match(page, /if \(snapshot\.intent === "adaptive"\) setRetryCoachSnapshot\(snapshot\)/);
-  assert.match(page, /function retryCoachQuestion\(\)[\s\S]*?dispatchCoachAction\(\{ \.\.\.snapshot, retry: true \}\)/);
+  assert.match(page, /if \(coachIntentSupportsRetry\(snapshot\.intent\)\) \{[\s\S]*?setRetryCoachSnapshot\(snapshot\)[\s\S]*?AI editor request failed · Try again is ready[\s\S]*?Coach request failed · Try again is ready/);
+  assert.match(page, /Response stopped because your code changed\.[\s\S]*?same question about your latest code/);
+  assert.match(page, /function rebaseCoachRetry\([\s\S]*?retry: true[\s\S]*?code: model\?\.getValue\(\) \?\? code[\s\S]*?modelVersion: model\?\.getVersionId\(\) \?\? 0[\s\S]*?documentRevision: coachDocumentRevisionRef\.current/);
+  const retryBody = page.slice(
+    page.indexOf("function retryCoachQuestion"),
+    page.indexOf("function askCoach"),
+  );
+  assert.match(retryBody, /!coachSnapshotMatchesScope\(snapshot\)/);
+  assert.doesNotMatch(retryBody, /!coachSnapshotIsCurrent\(snapshot\)/);
+  assert.match(retryBody, /dispatchCoachAction\(rebaseCoachRetry\(snapshot\)\)/);
   assert.match(page, /↻ Try again/);
-  assert.match(page, /Retry the same question with the same saved context/);
+  assert.match(page, /Retry the same question using your latest code/);
 });
 
 test("coach recovers from submit, stop, and a genuinely stalled response", async () => {
@@ -1198,7 +1211,7 @@ test("coach recovers from submit, stop, and a genuinely stalled response", async
   );
   assert.match(
     page,
-    /function cancelCoachWork\([\s\S]*?settleStreamingCoachMessage\([\s\S]*?Response stopped because the workspace changed/,
+    /function cancelCoachWork\([\s\S]*?const interruptionNote[\s\S]*?Response stopped because the workspace changed[\s\S]*?settleStreamingCoachMessage\(interruptionNote\)/,
   );
   assert.match(
     page,

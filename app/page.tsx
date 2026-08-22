@@ -1243,7 +1243,7 @@ export default function Home() {
     useState<CoachIntent | null>(null);
   const [aiStatus, setAiStatus] = useState<AiStatus>({});
   const [coachInput, setCoachInput] = useState("");
-  const [retryCoachSnapshot, setRetryCoachSnapshot] =
+  const [retryCoachSnapshot, setRetryCoachSnapshotState] =
     useState<CoachRequestSnapshot | null>(null);
   const [editorHint, setEditorHint] = useState<EditorHint | null>(null);
   const [inlineHintsEnabled, setInlineHintsEnabled] = useState(
@@ -1309,6 +1309,7 @@ export default function Home() {
   const coachStreamFrameRef = useRef<number | null>(null);
   const coachStreamingMessageRef = useRef<string | null>(null);
   const coachActiveSnapshotRef = useRef<CoachRequestSnapshot | null>(null);
+  const retryCoachSnapshotRef = useRef<CoachRequestSnapshot | null>(null);
   const coachRestartTimerRef = useRef<number | null>(null);
   const referenceSolutionGenerationRef = useRef(0);
   const referenceSolutionAbortRef = useRef<AbortController | null>(null);
@@ -1648,7 +1649,8 @@ export default function Home() {
     setPendingCoachQuestion("");
     setPendingCoachProvider("");
     setPendingCoachIntent("adaptive");
-    setRetryCoachSnapshot(null);
+    retryCoachSnapshotRef.current = null;
+    setRetryCoachSnapshotState(null);
     setEditorHint(null);
     setEditorEdit(null);
     setPendingEditorEdit(null);
@@ -2440,6 +2442,10 @@ export default function Home() {
   function appendCoachMessage(message: CoachMessage) {
     replaceCoachMessages([...messagesRef.current, message]);
   }
+  function setRetryCoachSnapshot(snapshot: CoachRequestSnapshot | null) {
+    retryCoachSnapshotRef.current = snapshot;
+    setRetryCoachSnapshotState(snapshot);
+  }
   function queueStreamingCoachMessage(id: string) {
     if (coachStreamFrameRef.current !== null) return;
     // A frame-level cadence keeps React responsive for token-by-token providers.
@@ -2465,6 +2471,41 @@ export default function Home() {
     flushStreamingCoachMessage(id);
     coachStreamingMessageRef.current = null;
     return true;
+  }
+  function coachSnapshotMatchesScope(
+    snapshot: CoachRequestSnapshot,
+    generation?: number,
+  ) {
+    return (
+      (generation === undefined || generation === coachGenerationRef.current) &&
+      selectedRef.current === snapshot.exerciseId &&
+      selectedLanguage === snapshot.language &&
+      (snapshot.language !== "sql" || snapshot.sqlDialect === sqlDialect) &&
+      coachRuntimeIdentity(aiStatusRef.current) === snapshot.runtimeIdentity
+    );
+  }
+  function coachSnapshotIsCurrent(
+    snapshot: CoachRequestSnapshot,
+    generation?: number,
+  ) {
+    const model = editorRef.current?.getModel();
+    return (
+      coachSnapshotMatchesScope(snapshot, generation) &&
+      coachDocumentRevisionRef.current === snapshot.documentRevision &&
+      (model?.getVersionId() ?? 0) === snapshot.modelVersion &&
+      (model?.getValue() ?? snapshot.code) === snapshot.code
+    );
+  }
+  function coachResponseIsCurrent(
+    snapshot: CoachRequestSnapshot,
+    generation?: number,
+  ) {
+    return snapshot.intent === "hint"
+      ? coachSnapshotMatchesScope(snapshot, generation)
+      : coachSnapshotIsCurrent(snapshot, generation);
+  }
+  function coachIntentSupportsRetry(intent?: CoachIntent) {
+    return intent === "adaptive" || intent === "edit";
   }
   function interruptActiveCoach(
     note: string,
@@ -2501,7 +2542,8 @@ export default function Home() {
     }
     const savedRetry =
       retryable &&
-      snapshot?.intent === "adaptive" &&
+      coachIntentSupportsRetry(snapshot?.intent) &&
+      snapshot &&
       coachSnapshotIsCurrent(snapshot)
         ? snapshot
         : null;
@@ -2519,15 +2561,44 @@ export default function Home() {
   function cancelCoachWork(
     resetConversation = false,
     discardVisibleHint = false,
+    preserveSideCoachRetry = false,
   ) {
+    const activeSnapshot = coachActiveSnapshotRef.current;
+    const previousRetry = retryCoachSnapshotRef.current;
+    const activeRetry =
+      coachIntentSupportsRetry(activeSnapshot?.intent) &&
+      activeSnapshot &&
+      coachSnapshotMatchesScope(activeSnapshot)
+        ? activeSnapshot
+        : null;
+    const savedRetry = preserveSideCoachRetry
+      ? activeRetry ??
+        (coachIntentSupportsRetry(previousRetry?.intent) &&
+        previousRetry &&
+        coachSnapshotMatchesScope(previousRetry)
+          ? previousRetry
+          : null)
+      : null;
+    const interruptedSideRequest =
+      preserveSideCoachRetry && activeRetry !== null;
+    const interruptionNote = interruptedSideRequest
+      ? "Response stopped because your code changed. Choose Try again to ask the same question about your latest code."
+      : "Response stopped because the workspace changed.";
     clearScheduledCoachRestart();
     coachGenerationRef.current += 1;
     coachAbortRef.current?.abort();
     coachAbortRef.current = null;
-    if (!resetConversation)
-      settleStreamingCoachMessage(
-        "Response stopped because the workspace changed.",
-      );
+    const settled = !resetConversation
+      ? settleStreamingCoachMessage(interruptionNote)
+      : false;
+    if (!settled && interruptedSideRequest) {
+      appendCoachMessage({
+        id: `message-${++messageSequenceRef.current}`,
+        role: "coach",
+        text: interruptionNote,
+        contextual: false,
+      });
+    }
     coachStreamingMessageRef.current = null;
     coachActiveSnapshotRef.current = null;
     coachActiveIntentRef.current = null;
@@ -2538,7 +2609,7 @@ export default function Home() {
     coachBusyRef.current = false;
     coachSubmitRef.current = false;
     pendingCoachSnapshotRef.current = null;
-    setRetryCoachSnapshot(null);
+    setRetryCoachSnapshot(savedRetry);
     setCoachBusy(false);
     setActiveCoachIntent(null);
     setCoachConsentOpen(false);
@@ -2546,7 +2617,11 @@ export default function Home() {
     setPendingCoachProvider("");
     setPendingCoachIntent("adaptive");
     if (discardVisibleHint) setEditorHint(null);
-    setHintNotice("");
+    setHintNotice(
+      savedRetry
+        ? "Code changed · Try again will use your latest code."
+        : "",
+    );
     if (resetConversation) replaceCoachMessages([coachWelcome]);
   }
   function clearEditorHint() {
@@ -2563,7 +2638,8 @@ export default function Home() {
     applyingEditorEditRef.current = false;
     if (!isAiEdit) {
       coachDocumentRevisionRef.current += 1;
-      if (coachActiveIntentRef.current !== "hint") cancelCoachWork(false);
+      if (coachActiveIntentRef.current !== "hint")
+        cancelCoachWork(false, false, true);
       setPendingEditorEdit(null);
       setEditorEdit(null);
     }
@@ -2583,6 +2659,9 @@ export default function Home() {
       editor.focus();
       return;
     }
+    coachDocumentRevisionRef.current += 1;
+    if (coachActiveIntentRef.current !== "hint")
+      cancelCoachWork(false, false, true);
     applyingEditorEditRef.current = true;
     editor.trigger("kitcode-ai", "undo", null);
     applyingEditorEditRef.current = false;
@@ -2600,6 +2679,9 @@ export default function Home() {
       editor?.focus();
       return;
     }
+    coachDocumentRevisionRef.current += 1;
+    if (coachActiveIntentRef.current !== "hint")
+      cancelCoachWork(false, false, true);
     applyingEditorEditRef.current = true;
     editor.pushUndoStop();
     editor.executeEdits("kitcode-ai", [
@@ -2757,7 +2839,8 @@ export default function Home() {
     }
   }
   function resetCode() {
-    if (coachActiveIntentRef.current !== "hint") cancelCoachWork(false);
+    if (coachActiveIntentRef.current !== "hint")
+      cancelCoachWork(false, false, true);
     coachDocumentRevisionRef.current += 1;
     clearEditorEdit();
     clearReferenceSolutionState();
@@ -3499,38 +3582,6 @@ export default function Home() {
     window.addEventListener("keydown", onShortcut, true);
     return () => window.removeEventListener("keydown", onShortcut, true);
   });
-  function coachSnapshotMatchesScope(
-    snapshot: CoachRequestSnapshot,
-    generation?: number,
-  ) {
-    return (
-      (generation === undefined || generation === coachGenerationRef.current) &&
-      selectedRef.current === snapshot.exerciseId &&
-      selectedLanguage === snapshot.language &&
-      (snapshot.language !== "sql" || snapshot.sqlDialect === sqlDialect) &&
-      coachRuntimeIdentity(aiStatusRef.current) === snapshot.runtimeIdentity
-    );
-  }
-  function coachSnapshotIsCurrent(
-    snapshot: CoachRequestSnapshot,
-    generation?: number,
-  ) {
-    const model = editorRef.current?.getModel();
-    return (
-      coachSnapshotMatchesScope(snapshot, generation) &&
-      coachDocumentRevisionRef.current === snapshot.documentRevision &&
-      (model?.getVersionId() ?? 0) === snapshot.modelVersion &&
-      (model?.getValue() ?? snapshot.code) === snapshot.code
-    );
-  }
-  function coachResponseIsCurrent(
-    snapshot: CoachRequestSnapshot,
-    generation?: number,
-  ) {
-    return snapshot.intent === "hint"
-      ? coachSnapshotMatchesScope(snapshot, generation)
-      : coachSnapshotIsCurrent(snapshot, generation);
-  }
   function dispatchCoachAction(snapshot: CoachRequestSnapshot) {
     if (!hasCoachConsent(snapshot.providerIdentity)) {
       pendingCoachSnapshotRef.current = snapshot;
@@ -3555,7 +3606,7 @@ export default function Home() {
     coachActiveSnapshotRef.current = snapshot;
     setActiveCoachIntent(snapshot.intent);
     coachSubmitRef.current = true;
-    if (snapshot.intent === "adaptive") setRetryCoachSnapshot(null);
+    if (coachIntentSupportsRetry(snapshot.intent)) setRetryCoachSnapshot(null);
     setCoachBusy(true);
     const generation = coachGenerationRef.current + 1;
     coachGenerationRef.current = generation;
@@ -3785,7 +3836,14 @@ export default function Home() {
         }
         if (snapshot.intent === "edit")
           setStatus("AI editor request failed · your code was not changed");
-        if (snapshot.intent === "adaptive") setRetryCoachSnapshot(snapshot);
+        if (coachIntentSupportsRetry(snapshot.intent)) {
+          setRetryCoachSnapshot(snapshot);
+          setHintNotice(
+            snapshot.intent === "edit"
+              ? "AI editor request failed · Try again is ready."
+              : "Coach request failed · Try again is ready.",
+          );
+        }
       } else
         setHintNotice(
           "The hint service is unavailable. Your code was not changed.",
@@ -4185,6 +4243,22 @@ export default function Home() {
     setCoachRestarting(false);
     setHintNotice("Coach restart cancelled · Try again when you are ready.");
   }
+  function rebaseCoachRetry(
+    snapshot: CoachRequestSnapshot,
+  ): CoachRequestSnapshot {
+    const editor = editorRef.current;
+    const model = editor?.getModel();
+    const position = editor?.getPosition();
+    return {
+      ...snapshot,
+      retry: true,
+      code: model?.getValue() ?? code,
+      modelVersion: model?.getVersionId() ?? 0,
+      documentRevision: coachDocumentRevisionRef.current,
+      cursorLine: position?.lineNumber ?? snapshot.cursorLine,
+      cursorColumn: position?.column ?? snapshot.cursorColumn,
+    };
+  }
   function retryCoachQuestion() {
     const snapshot = retryCoachSnapshot;
     if (
@@ -4192,13 +4266,16 @@ export default function Home() {
       coachBusyRef.current ||
       coachRestarting ||
       !coachReady ||
-      !coachSnapshotIsCurrent(snapshot)
+      !coachSnapshotMatchesScope(snapshot)
     ) {
       setRetryCoachSnapshot(null);
+      setHintNotice(
+        "The drill or AI provider changed. Please ask the coach again.",
+      );
       return;
     }
     coachSubmitRef.current = true;
-    dispatchCoachAction({ ...snapshot, retry: true });
+    dispatchCoachAction(rebaseCoachRetry(snapshot));
   }
   function askCoach(event: FormEvent) {
     event.preventDefault();
@@ -5656,7 +5733,7 @@ export default function Home() {
                 !coachReady
               }
               aria-label="Try the last coach question again"
-              title="Retry the same question with the same saved context"
+              title="Retry the same question using your latest code"
             >
               ↻ Try again
             </button>
