@@ -105,7 +105,7 @@ test("the language rail switches Python, SQL, and Java as isolated practice cont
   );
   assert.match(page, /api\/exercises\?language=\$\{selectedLanguage\}/);
   assert.match(page, /language: selectedLanguage/);
-  assert.match(page, /aria-pressed=\{selectedLanguage === language\.id\}/);
+  assert.match(page, /aria-pressed=\{selectedPracticeArea === language\.id\}/);
   assert.match(page, /Switch to \$\{language\.label\}/);
   assert.match(page, /monaco: "sql"/);
   assert.match(page, /monaco: "java"/);
@@ -572,7 +572,7 @@ test("KitCode offers one removable, motion-aware Kit mascot", async () => {
   assert.match(page, /if \(!enabled\) \{[\s\S]*?setMascotMoment\(null\);/);
   assert.match(page, /checked=\{mascotEnabled\}/);
   assert.match(page, /setMascotPreference\(event\.target\.checked\)/);
-  assert.match(page, /\{mascotEnabled && !settingsOpen && !fundamentalsActive && \(\s*<div[\s\S]*?className=\{`kit-floating/);
+  assert.match(page, /\{mascotEnabled && !settingsOpen && !interviewActive && \(\s*<div[\s\S]*?className=\{`kit-floating/);
   assert.match(page, /<KitMascot[\s\S]*?size="floating"[\s\S]*?motion=\{coachMascotMotion\}/);
   assert.doesNotMatch(page, /size="rail"/);
   assert.doesNotMatch(page, /size="coach"/);
@@ -1073,7 +1073,7 @@ test("adaptive coach offers a non-mutating editor hint workflow", async () => {
   assert.match(page, /expected_provider: snapshot\.expectedProvider/);
   assert.match(page, /expected_model: snapshot\.expectedModel/);
   assert.match(page, /expected_base_url: snapshot\.expectedBaseUrl/);
-  assert.match(page, /const coachReady = Boolean\(\s*!fundamentalsActive &&\s+aiStatus\.configured &&\s+draftReady/);
+  assert.match(page, /const coachReady = Boolean\(\s*!interviewActive &&\s+aiStatus\.configured &&\s+draftReady/);
   assert.match(page, /setDraftReady\(false\);\s+draftExerciseRef\.current = ""/);
   assert.match(page, /hintDecorationRef/);
   assert.match(page, /editor-hint-inline/);
@@ -1259,30 +1259,43 @@ test("a ready hint mounts a Monaco view zone only when inline hints are enabled"
   assert.match(page, /const onMount: OnMount = \(editor, monaco\) => \{[\s\S]*?hintDecorationRef\.current = \[\][\s\S]*?setEditorMountVersion\(\(version\) => version \+ 1\)/);
 });
 
-test("Python practice includes an optional 100-question fundamentals quiz", async () => {
-  const [page, quiz, bank, styles] = await Promise.all([
+test("Python, SQL, Java, and machine learning expose local interview FAQ practice", async () => {
+  const [page, quiz, pythonWrapper, bank, styles] = await Promise.all([
     readFile(new URL("app/page.tsx", projectRoot), "utf8"),
+    readFile(new URL("app/interview-quiz.tsx", projectRoot), "utf8"),
     readFile(new URL("app/python-fundamentals-quiz.tsx", projectRoot), "utf8"),
     import(new URL("app/python-fundamentals-questions.mjs", projectRoot)),
     readFile(new URL("app/globals.css", projectRoot), "utf8"),
   ]);
 
   assert.equal(bank.pythonFundamentalsQuestions.length, 100);
-  assert.match(page, /type PythonPracticeSection = "coding" \| "fundamentals"/);
-  assert.match(page, /kitcode:selected-python-section/);
-  assert.match(page, /100 optional MCQs/);
-  assert.match(page, /<PythonFundamentalsQuiz/);
-  assert.match(page, /!fundamentalsActive &&\s+aiStatus\.configured/);
-  assert.match(quiz, /100 common multiple-choice interview questions/);
-  assert.match(quiz, /kitcode:python-fundamentals-progress-v1/);
-  assert.match(quiz, /coding progress and drafts stay intact/);
+  assert.match(page, /type PracticeSection = "coding" \| "interview"/);
+  assert.match(page, /type PracticeArea = PracticeLanguage \| "machine-learning"/);
+  assert.match(page, /kitcode:selected-\$\{language\}-section/);
+  assert.match(page, /Interview FAQs/);
+  assert.match(page, /selectMachineLearning/);
+  assert.match(page, /<InterviewQuiz/);
+  assert.match(page, /!interviewActive &&\s+aiStatus\.configured/);
+  assert.match(pythonWrapper, /subject="python"/);
+  assert.match(quiz, /sqlInterviewQuestions/);
+  assert.match(quiz, /javaInterviewQuestions/);
+  assert.match(quiz, /machineLearningInterviewQuestions/);
+  assert.match(quiz, /balanceInterviewQuestionOptions/);
+  assert.match(quiz, /storageNamespace: "python-fundamentals"/);
+  assert.match(quiz, /progress-v2/);
+  assert.match(quiz, /legacyProgressStorageKey/);
+  assert.match(quiz, /legacyQuestion\.options\[Number\(legacyAnswer\)\]/);
+  assert.match(quiz, /question\.options\.indexOf\(selectedAnswer\)/);
+  assert.match(quiz, /Coding progress and drafts will stay intact/);
   assert.match(quiz, /role="radiogroup"/);
   assert.match(quiz, /Check answer/);
   assert.match(quiz, /Next unanswered/);
   assert.match(quiz, /Review misses/);
+  assert.match(quiz, /Reset all/);
   assert.match(styles, /\.practice-section-picker/);
   assert.match(styles, /\.fundamentals-workspace/);
   assert.match(styles, /\.fundamentals-option\.correct/);
+  assert.match(styles, /\.reset-all-button/);
 });
 
 test("an accepted submission opens a reviewed answer in a separate read-only editor tab", async () => {

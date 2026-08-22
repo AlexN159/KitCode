@@ -14,7 +14,7 @@ import {
   writeCoachConversation,
 } from "./coach-conversation-storage";
 import { readCoachStream } from "./coach-stream";
-import { PythonFundamentalsQuiz } from "./python-fundamentals-quiz";
+import { InterviewQuiz, type InterviewSubject } from "./interview-quiz";
 import {
   clearPersistedDraft,
   readPersistedDraft,
@@ -61,8 +61,9 @@ type Problem = {
   source?: "curated" | "ai_generated";
 };
 type PracticeLanguage = "python" | "sql" | "java";
+type PracticeArea = PracticeLanguage | "machine-learning";
 type PracticeLevel = Problem["difficulty"];
-type PythonPracticeSection = "coding" | "fundamentals";
+type PracticeSection = "coding" | "interview";
 type SqlDialect = "sqlite" | "postgresql" | "mysql" | "mssql";
 type EditorDocument = "learner" | "reference";
 type JudgeResult = {
@@ -502,6 +503,17 @@ function readLanguagePreference(): PracticeLanguage {
       : "python";
   } catch {
     return "python";
+  }
+}
+function readPracticeAreaPreference(): PracticeArea {
+  if (typeof window === "undefined") return "python";
+  try {
+    const saved = window.localStorage.getItem("kitcode:selected-practice-area");
+    return saved === "machine-learning"
+      ? "machine-learning"
+      : readLanguagePreference();
+  } catch {
+    return readLanguagePreference();
   }
 }
 function readLevelPreference(language: PracticeLanguage): PracticeLevel {
@@ -1126,12 +1138,14 @@ function readMascotPreference() {
     return true;
   }
 }
-function readPythonPracticeSection(): PythonPracticeSection {
+function readPracticeSection(language: PracticeLanguage): PracticeSection {
   if (typeof window === "undefined") return "coding";
   try {
-    return window.localStorage.getItem("kitcode:selected-python-section") ===
-      "fundamentals"
-      ? "fundamentals"
+    const saved = window.localStorage.getItem(
+      `kitcode:selected-${language}-section`,
+    );
+    return saved === "interview" || saved === "fundamentals"
+      ? "interview"
       : "coding";
   } catch {
     return "coding";
@@ -1172,8 +1186,11 @@ export default function Home() {
   const [selectedLanguage, setSelectedLanguage] = useState<PracticeLanguage>(
     readLanguagePreference,
   );
-  const [pythonPracticeSection, setPythonPracticeSection] =
-    useState<PythonPracticeSection>(readPythonPracticeSection);
+  const [selectedPracticeArea, setSelectedPracticeArea] =
+    useState<PracticeArea>(readPracticeAreaPreference);
+  const [practiceSection, setPracticeSection] = useState<PracticeSection>(() =>
+    readPracticeSection(readLanguagePreference()),
+  );
   const [sqlDialect, setSqlDialect] = useState<SqlDialect>(
     readSqlDialectPreference,
   );
@@ -1743,6 +1760,16 @@ export default function Home() {
     },
     [],
   );
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "kitcode:selected-practice-area",
+        selectedPracticeArea,
+      );
+    } catch {
+      /* The session selection remains available. */
+    }
+  }, [selectedPracticeArea]);
   useEffect(() => {
     try {
       window.localStorage.setItem("kitcode:selected-language", selectedLanguage);
@@ -2332,11 +2359,18 @@ export default function Home() {
     ]
       .filter(Boolean)
       .join(" and ") || "none";
-  const fundamentalsActive =
-    selectedLanguage === "python" &&
-    pythonPracticeSection === "fundamentals";
+  const interviewSubject: InterviewSubject | null =
+    selectedPracticeArea === "machine-learning"
+      ? "machine-learning"
+      : selectedPracticeArea === selectedLanguage &&
+          practiceSection === "interview"
+        ? selectedLanguage
+        : null;
+  const interviewActive = interviewSubject !== null;
+  const machineLearningActive =
+    selectedPracticeArea === "machine-learning";
   const coachReady = Boolean(
-    !fundamentalsActive &&
+    !interviewActive &&
       aiStatus.configured &&
       draftReady &&
       selected &&
@@ -2719,8 +2753,11 @@ export default function Home() {
     setReferenceSolutionLoading(false);
     setReferenceSolutionError("");
   }
-  function choosePythonPracticeSection(section: PythonPracticeSection) {
-    if (section === pythonPracticeSection) {
+  function choosePracticeSection(section: PracticeSection) {
+    if (
+      selectedPracticeArea === selectedLanguage &&
+      section === practiceSection
+    ) {
       setProblemDrawerOpen(false);
       return;
     }
@@ -2736,20 +2773,38 @@ export default function Home() {
     setTraceSteps([]);
     setTraceIndex(0);
     setStatus(
-      section === "fundamentals"
-        ? "Python Fundamentals · choose an answer"
+      section === "interview"
+        ? `${languageMeta(selectedLanguage).label} Interview FAQs · choose an answer`
         : "Ready to run",
     );
-    setPythonPracticeSection(section);
+    setSelectedPracticeArea(selectedLanguage);
+    setPracticeSection(section);
     setProblemDrawerOpen(false);
     try {
       window.localStorage.setItem(
-        "kitcode:selected-python-section",
+        `kitcode:selected-${selectedLanguage}-section`,
         section,
       );
     } catch {
       /* The section remains selected for this session. */
     }
+  }
+  function selectMachineLearning() {
+    if (selectedPracticeArea === "machine-learning") return;
+    flushCoachConversationToStorage();
+    cancelCoachWork(false, true);
+    clearEditorEdit();
+    workflowGenerationRef.current += 1;
+    workflowBusyRef.current = false;
+    setWorkflowBusy(false);
+    setCelebration(null);
+    setRunResult(null);
+    clearReferenceSolutionState();
+    setTraceSteps([]);
+    setTraceIndex(0);
+    setStatus("Machine Learning Concepts · choose an answer");
+    setSelectedPracticeArea("machine-learning");
+    setProblemDrawerOpen(false);
   }
   function selectExercise(exerciseId: string) {
     if (exerciseId === selected) {
@@ -2784,7 +2839,19 @@ export default function Home() {
     setSelected(exerciseId);
   }
   function selectLanguage(language: PracticeLanguage) {
-    if (language === selectedLanguage) return;
+    if (language === selectedLanguage) {
+      if (selectedPracticeArea === selectedLanguage) return;
+      const nextSection = readPracticeSection(language);
+      setSelectedPracticeArea(language);
+      setPracticeSection(nextSection);
+      setStatus(
+        nextSection === "interview"
+          ? `${languageMeta(language).label} Interview FAQs · choose an answer`
+          : "Ready to run",
+      );
+      setProblemDrawerOpen(false);
+      return;
+    }
     flushCoachConversationToStorage();
     coachConversationScopeRef.current = "";
     cancelCoachWork(true, true);
@@ -2804,9 +2871,16 @@ export default function Home() {
     setQuery("");
     setTopicFilter("All topics");
     setDifficulty(readLevelPreference(language));
-    setStatus(`Loading ${languageMeta(language).label} drills…`);
+    const nextSection = readPracticeSection(language);
+    setStatus(
+      nextSection === "interview"
+        ? `${languageMeta(language).label} Interview FAQs · choose an answer`
+        : `Loading ${languageMeta(language).label} drills…`,
+    );
     setSelected("");
     setSelectedLanguage(language);
+    setSelectedPracticeArea(language);
+    setPracticeSection(nextSection);
   }
   function selectSqlDialect(dialect: SqlDialect) {
     if (dialect === sqlDialect) return;
@@ -4413,14 +4487,14 @@ export default function Home() {
         ? "hunting"
         : mascotMoment?.motion ?? (mascotSleeping ? "sleeping" : "idle");
   return (
-    <main className={`shell${fundamentalsActive ? " fundamentals-mode" : ""}`}>
+    <main className={`shell${interviewActive ? " fundamentals-mode" : ""}`}>
       {celebration && (
         <SuccessCelebration
           key={celebration.id}
           variant={celebration.variant}
         />
       )}
-      {mascotEnabled && !settingsOpen && !fundamentalsActive && (
+      {mascotEnabled && !settingsOpen && !interviewActive && (
         <div
           className={`kit-floating${mascotDragging ? " is-dragging" : ""}`}
           style={{
@@ -4556,26 +4630,41 @@ export default function Home() {
         <div
           className="language-rail"
           role="group"
-          aria-label="Practice language"
+          aria-label="Practice area"
         >
           {languages.map((language) => (
             <button
               key={language.id}
               type="button"
               className={
-                selectedLanguage === language.id
+                selectedPracticeArea === language.id
                   ? "rail-button language-button active"
                   : "rail-button language-button"
               }
               onClick={() => selectLanguage(language.id)}
               aria-label={`Switch to ${language.label} practice`}
-              aria-pressed={selectedLanguage === language.id}
+              aria-pressed={selectedPracticeArea === language.id}
               title={`Switch to ${language.label}`}
             >
               <span aria-hidden="true">{language.short}</span>
               <span className="sr-only">{language.label}</span>
             </button>
           ))}
+          <button
+            type="button"
+            className={
+              machineLearningActive
+                ? "rail-button language-button active"
+                : "rail-button language-button"
+            }
+            onClick={selectMachineLearning}
+            aria-label="Switch to Machine Learning interview FAQs"
+            aria-pressed={machineLearningActive}
+            title="Machine Learning interview FAQs"
+          >
+            <span aria-hidden="true">ML</span>
+            <span className="sr-only">Machine Learning</span>
+          </button>
         </div>
         <div className="rail-divider" aria-hidden="true" />
         <button
@@ -4622,14 +4711,20 @@ export default function Home() {
       )}
       <aside
         className={`problem-bank ${problemDrawerOpen ? "drawer-open" : ""}`}
-        aria-label="Practice problems"
+        aria-label="Practice navigator"
       >
         <div className="bank-heading">
           <div>
             <p className="eyebrow">
-              KITCODE · {activeLanguage.label.toUpperCase()}
+              KITCODE · {machineLearningActive
+                ? "MACHINE LEARNING"
+                : activeLanguage.label.toUpperCase()}
             </p>
-            <h1>{activeLanguage.label} Practice</h1>
+            <h1>
+              {machineLearningActive
+                ? "Machine Learning Practice"
+                : `${activeLanguage.label} Practice`}
+            </h1>
           </div>
           <button
             className="drawer-close"
@@ -4639,43 +4734,48 @@ export default function Home() {
             ×
           </button>
         </div>
-        {selectedLanguage === "python" && (
+        {!machineLearningActive && (
           <div
             className="practice-section-picker"
             role="group"
-            aria-label="Python practice section"
+            aria-label={`${activeLanguage.label} practice section`}
           >
             <button
               type="button"
-              className={!fundamentalsActive ? "active" : ""}
-              aria-pressed={!fundamentalsActive}
-              onClick={() => choosePythonPracticeSection("coding")}
+              className={!interviewActive ? "active" : ""}
+              aria-pressed={!interviewActive}
+              onClick={() => choosePracticeSection("coding")}
             >
               Coding drills
-              <small>Write and run Python</small>
+              <small>Write and run {activeLanguage.label}</small>
             </button>
             <button
               type="button"
-              className={fundamentalsActive ? "active" : ""}
-              aria-pressed={fundamentalsActive}
-              onClick={() => choosePythonPracticeSection("fundamentals")}
+              className={interviewActive ? "active" : ""}
+              aria-pressed={interviewActive}
+              onClick={() => choosePracticeSection("interview")}
             >
-              Fundamentals
-              <small>100 optional MCQs</small>
+              Interview FAQs
+              <small>Core multiple choice</small>
             </button>
           </div>
         )}
-        {fundamentalsActive ? (
+        {interviewActive ? (
           <div className="fundamentals-bank-summary">
             <div>
-              <p className="eyebrow">PYTHON INTERVIEW PREP</p>
-              <h2>Fundamentals question bank</h2>
+              <p className="eyebrow">INTERVIEW PREP</p>
+              <h2>
+                {machineLearningActive
+                  ? "Machine Learning concept FAQs"
+                  : `${activeLanguage.label} interview question bank`}
+              </h2>
             </div>
             <div className="fundamentals-bank-stat">
-              <b>100</b>
+              <b>FAQ</b>
               <span>
-                Common interview questions covering Python syntax, types,
-                runtime behavior, OOP, testing, and concurrency.
+                {machineLearningActive
+                  ? "Core questions covering linear models, optimization, regularization, trees, evaluation, neural networks, and transformers."
+                  : `Common ${activeLanguage.label} questions with answer explanations and topic filters.`}
               </span>
             </div>
             <p>
@@ -4684,9 +4784,9 @@ export default function Home() {
             </p>
             <button
               type="button"
-              onClick={() => choosePythonPracticeSection("coding")}
+              onClick={() => choosePracticeSection("coding")}
             >
-              Return to coding drills
+              Return to {activeLanguage.label} coding
             </button>
           </div>
         ) : (
@@ -4828,10 +4928,17 @@ export default function Home() {
         )}
       </aside>
       <section className="workspace">
-        {fundamentalsActive ? (
-          <PythonFundamentalsQuiz
+        {interviewActive && interviewSubject ? (
+          <InterviewQuiz
+            key={interviewSubject}
+            subject={interviewSubject}
             clock={clock}
-            onReturnToCoding={() => choosePythonPracticeSection("coding")}
+            onReturnToCoding={() => choosePracticeSection("coding")}
+            returnLabel={
+              machineLearningActive
+                ? `Return to ${activeLanguage.label} coding`
+                : "Return to coding"
+            }
           />
         ) : (
           <>

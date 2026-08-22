@@ -1,6 +1,6 @@
 # KitCode Practice Studio
 
-Practise Python, Java, and SQL in one focused Windows workspace. KitCode combines a curated exercise bank, local code execution, progress tracking, reviewed answers, and optional live coaching from Codex—without requiring a Git or terminal workflow.
+Practise Python, Java, SQL, and machine-learning interview concepts in one focused Windows workspace. KitCode combines a curated exercise bank, local code execution, progress tracking, reviewed answers, and optional live coaching from Codex—without requiring a Git or terminal workflow.
 
 <p align="center">
   <a href="https://github.com/AlexN159/KitCode/releases/latest/download/KitCode-Windows.zip">
@@ -17,7 +17,7 @@ Practise Python, Java, and SQL in one focused Windows workspace. KitCode combine
 - **A complete feedback loop:** run code, inspect output, submit against the exercise test suite, and track completed problems.
 - **Reviewed best answers:** after a correct submission, compare your approach with the expected solution, its Big-O target, and the readability-first selection rubric.
 - **Python line-by-line tracing:** step through executed lines and inspect changing values when a program is difficult to reason about.
-- **100 Python fundamentals questions:** use the optional multiple-choice interview bank to review language concepts without opening the code editor.
+- **Interview FAQ banks:** review 100 questions each for Python, Java, SQL, and machine-learning concepts without opening the code editor.
 - **Local-first practice:** the curated bank, runner, drafts, and progress stay on your computer and continue to work offline after initial setup.
 
 KitCode works well for first-time practice, interview preparation, refreshing fundamentals, learning data structures and algorithms, or building confidence before moving into larger projects.
@@ -31,7 +31,7 @@ KitCode works well for first-time practice, interview preparation, refreshing fu
 5. Press **F6** to submit it against the full exercise test suite.
 6. After passing, open **Best answer** to compare complexity, clarity, and implementation choices.
 
-Your selected level, drafts, solved exercises, fundamentals score, and recent coach conversations are remembered locally.
+Your selected level, drafts, solved exercises, interview FAQ scores, and recent coach conversations are remembered locally.
 
 ## Live coaching with Codex
 
@@ -55,6 +55,11 @@ The coach receives the visible exercise context, your current script, cursor pos
 | **Java** | 150 exercises: 35 Easy, 86 Medium, 29 Hard | Core syntax, arrays, strings, loops, collections and maps, stacks, linked lists, binary search, sliding windows, trees, graphs, greedy algorithms, dynamic programming, backtracking, design, and advanced graph problems |
 | **SQL** | 150 exercises: 46 Easy, 89 Medium, 15 Hard | Filtering, ordering, aggregation, `GROUP BY`, `HAVING`, joins, `NULL`, `CASE`, subqueries, set operations, window functions, ranking, running totals, recursive CTEs, time-series analysis, gaps and islands, relational division, hierarchies, and reachability |
 | **Python Fundamentals** | 100 optional multiple-choice questions | The GIL and concurrency, mutable and immutable types, hashing, iteration, generators, functions and scope, exceptions, files, modules, packaging, the standard library, OOP, dunder methods, testing, security, and complexity |
+| **Java Interview FAQs** | 100 optional multiple-choice questions | Java semantics, OOP, exceptions, generics, collections, streams, concurrency, modern Java, testing, and the JVM |
+| **SQL Interview FAQs** | 100 optional multiple-choice questions | Filtering, joins, aggregation, window functions, CTEs, schema design, indexes, query performance, transactions, security, and warehousing |
+| **Machine Learning Concepts** | 100 optional multiple-choice questions | Linear and logistic regression, gradient descent, preprocessing, L1/L2/elastic-net regularization, evaluation, random forests and boosting, classical models, neural networks, transformer query/key/value attention, and production ML |
+
+FAQ answers are checked locally with explanations, topic filters, next-unanswered and review-misses views, and a **Reset all** control. Correct answers are evenly distributed across A–D and presented in a stable order between sessions; saved progress remains separate for each subject and never changes coding-drill completion.
 
 SQL practice includes SQLite, PostgreSQL, MySQL, and SQL Server syntax choices. Queries are parsed and translated when necessary, then executed safely against fresh local SQLite fixtures so the exercises remain zero-install and deterministic.
 
